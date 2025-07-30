@@ -1,0 +1,88 @@
+name: Sign Agent Card
+
+on:
+  push:
+    branches: [main]
+    paths: ['agent-card.json']  # Trigger when agent card is updated
+  workflow_dispatch:  # Allow manual triggering
+
+permissions:
+  contents: read
+  id-token: write  # Required for Sigstore OIDC token
+
+jobs:
+  sign-agent-card:
+    name: Sign and Verify Agent Card
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install UV package manager
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install sigstore-a2a
+        run: |
+          # Option 1: Install from PyPI (when published)
+          # uv add sigstore-a2a
+
+          # Option 2: Install from source
+          git clone https://github.com/your-org/sigstore-a2a.git sigstore-a2a-repo
+          cd sigstore-a2a-repo
+          uv sync --prerelease=allow
+          uv build
+          cd ..
+          uv add ./sigstore-a2a-repo/dist/*.whl
+
+      - name: Sign Agent Card
+        run: |
+          uv run sigstore-a2a sign agent-card.json \
+            --output signed-agent-card.json \
+            --repository ${{ github.repository }}
+
+      - name: Verify signature
+        run: |
+          uv run sigstore-a2a verify signed-agent-card.json \
+            --repository ${{ github.repository }} \
+            --workflow "${{ github.workflow }}"
+
+      - name: Display signing information
+        run: |
+          echo "Agent Card signed successfully!"
+          echo "Repository: ${{ github.repository }}"
+          echo "Workflow: ${{ github.workflow }}"
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "Event: ${{ github.event_name }}"
+
+      - name: Upload signed Agent Card
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-agent-card
+          path: signed-agent-card.json
+          retention-days: 90
+
+      # Optional: Commit signed card back to repository
+      - name: Commit signed Agent Card
+        if: github.event_name == 'push'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add signed-agent-card.json
+          git diff --staged --quiet || git commit -m "Update signed Agent Card
+
+          Automatically signed Agent Card with Sigstore.
+
+          Repository: ${{ github.repository }}
+          Workflow: ${{ github.workflow }}
+          Commit SHA: ${{ github.sha }}
+          Actor: ${{ github.actor }}"
+          git push

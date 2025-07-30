@@ -1,0 +1,7 @@
+{
+  "name": "Sign Agent Card with Sigstore",
+  "description": "Cryptographically sign A2A Agent Cards using Sigstore keyless signing",
+  "iconName": "shield-check",
+  "categories": ["Security", "Deployment"],
+  "filePatterns": ["agent-card.json", "*.agent.json"]
+}

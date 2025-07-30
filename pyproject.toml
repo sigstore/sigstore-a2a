@@ -1,0 +1,74 @@
+[project]
+name = "sigstore-a2a"
+version = "0.4.0"
+description = "Keyless signing library for A2A Agent Cards using Sigstore and SLSA provenance"
+authors = [
+    { name = "Luke Hinds", email = "luke@rdrocket.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "betterproto>=2.0.0b6",
+    "a2a-sdk>=0.2.16",
+    "sigstore>=3.6.4",
+    "pydantic>=2.0.0,<3.0.0",
+    "click>=8.0.0",
+    "httpx>=0.24.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "cryptography>=41.0.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+sigstore-a2a = "sigstore_a2a.cli.main:cli"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "ruff>=0.12.5",
+    "mypy>=1.0.0",
+    "types-requests",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".venv",
+    "venv",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

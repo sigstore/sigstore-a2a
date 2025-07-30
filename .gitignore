@@ -1,0 +1,79 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Environment variables
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.tool-versions
+.claude/
+.serena/
+CLAUDE.md
+
+# Logs
+logs/
+*.log
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# AgentUp
+dump.rdb
+.planning/
+
+# Testing and CI artifacts
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+pytest_cache/
+*.coverage
+.mypy_cache/
+.ruff_cache/
+bandit-report.json
+requirements-ci.txt
+monkeytype.sqlite3
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+*~
+
+# mkdocs
+site/
