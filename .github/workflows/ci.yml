@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
   id-token: write  # Required for Sigstore OIDC
+  attestations: write # Required for GitHub Attestations
 
 jobs:
   lint-and-format:
