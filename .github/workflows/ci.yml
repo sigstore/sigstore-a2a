@@ -179,10 +179,6 @@ jobs:
           path: signed-example.json
           retention-days: 30
 
-      - uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: example_agentcard.json
-
       - name: Display signature info
         run: |
           echo "Successfully signed Agent Card!"
