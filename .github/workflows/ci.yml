@@ -188,3 +188,21 @@ jobs:
           echo "Actor: ${{ github.actor }}"
           uv run sigstore-a2a --verbose verify signed-example.json \
             --repository ${{ github.repository }}
+      
+      - name: Create Gist
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const content = fs.readFileSync('signed-example.json', 'utf8');
+            const gist = await github.rest.gists.create({
+              files: {
+                'signed-example.json': {
+                  content: content
+                }
+              },
+              public: true,
+              description: 'Signed Agent Card from CI'
+            });
+            console.log(`Gist URL: ${gist.data.html_url}`);
+            console.log(`Raw URL: ${gist.data.files['signed-example.json'].raw_url}`);
