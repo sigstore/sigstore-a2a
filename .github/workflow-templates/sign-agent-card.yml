@@ -44,13 +44,15 @@ jobs:
 
       - name: Sign Agent Card
         run: |
-          uv run sigstore-a2a sign agent-card.json \
+          uv run sigstore-a2a sign \
+            example-agentcard.json \
             --output signed-agent-card.json \
             --repository ${{ github.repository }}
 
       - name: Verify signature
         run: |
-          uv run sigstore-a2a verify signed-agent-card.json \
+          uv run sigstore-a2a verify \
+            signed-agent-card.json \
             --repository ${{ github.repository }} \
             --workflow "${{ github.workflow }}"
 

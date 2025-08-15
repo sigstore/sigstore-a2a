@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from a2a.types import AgentCard
+from sigstore._internal.trust import ClientTrustConfig
 from sigstore.dsse import DigestSet, StatementBuilder, Subject
 from sigstore.oidc import IdentityToken, Issuer, detect_credential
 from sigstore.sign import SigningContext
@@ -16,7 +17,13 @@ from .utils.crypto import canonicalize_json
 class AgentCardSigner:
     """Signs A2A Agent Cards using Sigstore keyless signing."""
 
-    def __init__(self, issuer: Issuer | None = None, identity_token: str | None = None, staging: bool = False):
+    def __init__(
+        self,
+        issuer: Issuer | None = None,
+        identity_token: str | None = None,
+        trust_config: Path | None = None,
+        staging: bool = False,
+    ):
         """Initialize the Agent Card signer.
 
         Args:
@@ -27,15 +34,24 @@ class AgentCardSigner:
         self.issuer = issuer
         self.identity_token = identity_token
         self.staging = staging
-        self._signer: SigningContext | None = None
+        self.trust_config = trust_config
 
     def _get_signer(self) -> SigningContext:
-        """Get or create a Sigstore signer instance."""
-        if self._signer is None:
-            if self.staging:
-                self._signer = SigningContext.production()  # Will use staging when available
-            else:
-                self._signer = SigningContext.production()
+        """
+        Retrieves or creates a Sigstore signer instance based on the configuration.
+
+        The method prioritizes the staging environment if enabled, falls back to a
+        custom trust configuration, and defaults to the production environment
+        for signing operations. This ensures the correct root of trust is used.
+        """
+
+        if self.staging:
+            self._signer = SigningContext.staging()
+        elif self.trust_config:
+            trust_config = ClientTrustConfig.from_json(self.trust_config.read_text())
+            self._signer = SigningContext._from_trust_config(trust_config)
+        else:
+            self._signer = SigningContext.production()
 
         return self._signer
 
@@ -95,29 +111,26 @@ class AgentCardSigner:
 
         signing_context = self._get_signer()
 
+        # 1) Explicitly supplied identity token
+        # 2) Ambient credential detected in the environment
+        # 3) Interactive OAuth flow
         try:
-            # Detect ambient credential (returns string token or None)
-            ambient_credential = detect_credential()
-
-            if ambient_credential:
-                # Wrap ambient credential in IdentityToken object
-                identity = IdentityToken(ambient_credential)
-                with signing_context.signer(identity, cache=True) as signer:
-                    bundle = signer.sign_dsse(statement)
-            elif self.identity_token:
-                # Use provided identity token (wrap if string)
+            if self.identity_token:
                 if isinstance(self.identity_token, str):
                     identity = IdentityToken(self.identity_token)
                 else:
                     identity = self.identity_token
-                with signing_context.signer(identity, cache=True) as signer:
-                    bundle = signer.sign_dsse(statement)
+
+            elif ambient_credential := detect_credential():
+                identity = IdentityToken(ambient_credential)
+
             else:
-                # Fallback to interactive flow
                 issuer = self.issuer or Issuer.production()
                 identity = issuer.identity_token()
-                with signing_context.signer(identity, cache=True) as signer:
-                    bundle = signer.sign_dsse(statement)
+
+            with signing_context.signer(identity, cache=True) as signer:
+                bundle = signer.sign_dsse(statement)
+
         except Exception as e:
             raise RuntimeError(f"Failed to sign agent card: {e}") from e
 
