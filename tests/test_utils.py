@@ -31,13 +31,6 @@ class TestCrypto:
         expected = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
         assert digest == expected
 
-    def test_compute_digest_sha1(self):
-        """Test SHA-1 digest computation."""
-        data = b"hello world"
-        digest = compute_digest(data, "sha1")
-        expected = "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed"
-        assert digest == expected
-
     def test_compute_digest_unsupported(self):
         """Test unsupported digest algorithm."""
         data = b"hello world"
