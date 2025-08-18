@@ -1,13 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "sigstore-a2a"
-version = "0.4.0"
+dynamic = ["version"]
 description = "Keyless signing library for A2A Agent Cards using Sigstore and SLSA provenance"
+readme = "README.md"
+license = { file = "LICENSE" }
 authors = [
     { name = "Luke Hinds", email = "luke@rdrocket.com" }
 ]
 requires-python = ">=3.11"
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Topic :: Security",
+  "Topic :: Security :: Cryptography",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Typing :: Typed",
+]
 dependencies = [
-    "betterproto>=2.0.0b6",
+    "betterproto>=2.0.0b6", # sigstore-a2a is still experimental, prerelease is ok for now (4.0.0 sigstore-python)
     "a2a-sdk>=0.2.16",
     "sigstore>=3.6.4",
     "pydantic>=2.0.0,<3.0.0",
@@ -18,9 +38,36 @@ dependencies = [
     "cryptography>=41.0.0",
     "rich>=13.0.0",
 ]
+keywords = [
+  "agent-to-agent communication",
+  "AI agent card signing",
+  "Sigstore for agents",
+  "keyless signing",
+  "verifiable provenance",
+  "agent supply chain security",
+  "AI trust framework",
+  "transparency log",
+  "digital signatures for AI",
+  "agent attestation",
+  "agent card verification",
+]
 
 [project.scripts]
 sigstore-a2a = "sigstore_a2a.cli.main:cli"
+
+[project.urls]
+Homepage = "<>"
+Changelog = "https://github.com/sigstore/sigstore-a2a/blob/main/CHANGELOG.md"
+Documentation = "<>"
+Source = "https://github.com/sigstore/sigstore-a2a"
+Issues = "https://github.com/sigstore/sigstore-a2a/issues"
+PyPI = "<>"
+
+[tool.hatch.version]
+path = "sigstore_a2a/__init__.py"
+
+[tool.hatch.build]
+packages = ["sigstore_a2a"]
 
 [dependency-groups]
 dev = [
@@ -68,7 +115,3 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"

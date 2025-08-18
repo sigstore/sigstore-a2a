@@ -1,65 +1,34 @@
+---
 name: Bug Report
-description: Report a bug in sigstore-a2a
-title: "[Bug]: "
-labels: ["bug", "triage"]
+description: File a bug report
+title: '[Bug]: '
+type: Bug
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report a bug! Please fill out the sections below to help us understand and fix the issue.
-
+        Thanks for stopping by to let us know something could be better!
   - type: textarea
-    id: description
+    id: what-happened
     attributes:
-      label: Bug Description
-      description: A clear and concise description of what the bug is.
-      placeholder: Describe the bug...
+      label: What happened?
+      description: Also tell us what you expected to happen and how to reproduce the
+        issue.
+      placeholder: Tell us what you see!
+      value: A bug happened!
     validations:
       required: true
-
-  - type: textarea
-    id: reproduction
-    attributes:
-      label: Steps to Reproduce
-      description: Steps to reproduce the behavior
-      placeholder: |
-        1. Run command '...'
-        2. Sign agent card with '...'
-        3. See error
-    validations:
-      required: true
-
-  - type: textarea
-    id: expected
-    attributes:
-      label: Expected Behavior
-      description: A clear and concise description of what you expected to happen.
-    validations:
-      required: true
-
-  - type: textarea
-    id: environment
-    attributes:
-      label: Environment
-      description: Please provide details about your environment
-      placeholder: |
-        - OS: [e.g. Ubuntu 22.04, macOS 14, Windows 11]
-        - Python version: [e.g. 3.11.5]
-        - sigstore-a2a version: [e.g. 0.4.0]
-        - Installation method: [uv, pip, source]
-        - Environment: [GitHub Actions, local, other CI]
-    validations:
-      required: true
-
   - type: textarea
     id: logs
     attributes:
-      label: Error Logs
-      description: If applicable, add error logs or output to help explain your problem.
+      label: Relevant log output
+      description: Please copy and paste any relevant log output.
       render: shell
-
-  - type: textarea
-    id: additional
+  - type: checkboxes
+    id: terms
     attributes:
-      label: Additional Context
-      description: Add any other context about the problem here, such as related issues or attempted workarounds.
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our [Code of Conduct](https://github.com/sigstore/community/blob/main/CODE_OF_CONDUCT.md)
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true
