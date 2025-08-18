@@ -13,6 +13,7 @@ console = Console()
 @click.command("verify")
 @click.argument("signed_card", type=click.Path(exists=True, path_type=Path))
 @click.option("--staging", is_flag=True, help="Use Sigstore staging environment")
+@click.option("--trust_config", type=click.Path(path_type=Path), help="The client trust configuration to use")
 @click.option("--repository", help="Required repository constraint (e.g., owner/repo)")
 @click.option("--workflow", help="Required workflow name constraint")
 @click.option("--actor", help="Required actor/user constraint")
@@ -22,6 +23,7 @@ def verify_cmd(
     ctx: click.Context,
     signed_card: Path,
     staging: bool,
+    trust_config: Path | None,
     repository: str | None,
     workflow: str | None,
     actor: str | None,
@@ -59,7 +61,7 @@ def verify_cmd(
             SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console, transient=True
         ) as progress:
             progress.add_task("Initializing verifier...", total=None)
-            verifier = AgentCardVerifier(staging=staging)
+            verifier = AgentCardVerifier(staging=staging, trust_config=trust_config)
 
             progress.add_task("Verifying signature...", total=None)
             result = verifier.verify_signed_card(signed_card, constraints)

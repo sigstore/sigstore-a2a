@@ -21,6 +21,7 @@ console = Console()
     help="Output path for signed Agent Card (default: <input>.signed.json)",
 )
 @click.option("--staging", is_flag=True, help="Use Sigstore staging environment")
+@click.option("--trust_config", type=click.Path(path_type=Path), help="The client trust configuration to use")
 @click.option("--no-provenance", is_flag=True, help="Skip SLSA provenance generation")
 @click.option("--repository", help="Override repository for provenance (e.g., owner/repo)")
 @click.option("--commit-sha", help="Override commit SHA for provenance")
@@ -31,6 +32,7 @@ def sign_cmd(
     agent_card: Path,
     output: Path | None,
     staging: bool,
+    trust_config: Path | None,
     no_provenance: bool,
     repository: str | None,
     commit_sha: str | None,
@@ -63,7 +65,7 @@ def sign_cmd(
         ) as progress:
             # Initialize signer
             progress.add_task("Initializing signer...", total=None)
-            signer = AgentCardSigner(staging=staging)
+            signer = AgentCardSigner(staging=staging, trust_config=trust_config)
 
             # Generate provenance if requested
             provenance_bundle = None

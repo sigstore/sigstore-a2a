@@ -4,6 +4,7 @@ from typing import Any
 
 from a2a.types import AgentCard
 from cryptography import x509
+from sigstore._internal.trust import ClientTrustConfig
 from sigstore.models import Bundle
 from sigstore.verify import Verifier
 from sigstore.verify.policy import AnyOf
@@ -69,22 +70,30 @@ class VerificationResult:
 class AgentCardVerifier:
     """Verifies signed A2A Agent Cards using Sigstore."""
 
-    def __init__(self, staging: bool = False):
+    def __init__(self, staging: bool = False, trust_config: Path | None = None):
         """Initialize the Agent Card verifier.
 
         Args:
             staging: Use Sigstore staging environment
         """
         self.staging = staging
-        self._verifier: Verifier | None = None
+        self.trust_config = trust_config
 
     def _get_verifier(self) -> Verifier:
-        """Get or create a Sigstore verifier instance."""
-        if self._verifier is None:
-            if self.staging:
-                self._verifier = Verifier.staging()
-            else:
-                self._verifier = Verifier.production()
+        """
+        Retrieves or creates a Sigstore verifier instance based on the configuration.
+
+        The method prioritizes the staging environment if enabled, falls back to a
+        custom trust configuration, and defaults to the production environment.
+        This ensures the correct root of trust is used for verification.
+        """
+        if self.staging:
+            self._verifier = Verifier.staging()
+        elif self.trust_config:
+            trust_config = ClientTrustConfig.from_json(self.trust_config.read_text())
+            self._verifier = Verifier._from_trust_config(trust_config)
+        else:
+            self._verifier = Verifier.production()
         return self._verifier
 
     def _extract_identity(self, certificate: x509.Certificate) -> dict[str, Any]:
@@ -242,11 +251,11 @@ class AgentCardVerifier:
             identity = self._extract_identity(bundle.signing_certificate)
 
             # Add transparency log information if available
-            if hasattr(bundle, 'log_entry') and bundle.log_entry:
-                if hasattr(bundle.log_entry, 'log_index'):
+            if hasattr(bundle, "log_entry") and bundle.log_entry:
+                if hasattr(bundle.log_entry, "log_index"):
                     log_index = bundle.log_entry.log_index
-                    identity['transparency_log_index'] = log_index
-                    identity['transparency_log_url'] = f"https://search.sigstore.dev/?logIndex={log_index}"
+                    identity["transparency_log_index"] = log_index
+                    identity["transparency_log_url"] = f"https://search.sigstore.dev/?logIndex={log_index}"
 
             # Check constraints if provided
             constraint_errors = []
