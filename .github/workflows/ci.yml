@@ -19,6 +19,8 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  schedule:
+    - cron: '0 0 * * *'
 
 permissions:
   contents: read
@@ -26,33 +28,6 @@ permissions:
   attestations: write # Required for GitHub Attestations
 
 jobs:
-  lint-and-format:
-    name: Code Quality
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install UV
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Install dependencies
-        run: |
-          make install-dev
-
-      - name: Lint and type check
-        run: |
-          make lint
-        continue-on-error: true  # Allow type check failures for now, until we nail down types
-
   test:
     name: Test Suite
     runs-on: ubuntu-latest
@@ -69,18 +44,14 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install UV
+      - name: Install UV and dependencies
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Install dependencies
-        run: |
           make install-dev
 
       - name: Run tests
-        run: |
-          make test
+        run: make test
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -101,13 +72,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install UV
+      - name: Install UV and dependencies
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Install dependencies
-        run: |
           make install
 
       - name: Test CLI help
@@ -116,11 +84,10 @@ jobs:
           uv run sigstore-a2a sign --help
           uv run sigstore-a2a verify --help
 
-
   build:
     name: Build Package
     runs-on: ubuntu-latest
-    needs: [lint-and-format, test, test-cli]
+    needs: [test, test-cli]
 
     steps:
       - name: Checkout repository
@@ -137,8 +104,7 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Build package
-        run: |
-          make build
+        run: make build
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -151,8 +117,7 @@ jobs:
     name: Sign Example Agent Card
     runs-on: ubuntu-latest
     needs: [build]
-    if: |
-      github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     permissions:
       contents: read
       id-token: write
@@ -166,13 +131,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install UV
+      - name: Install UV and dependencies
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Install dependencies
-        run: |
           make install
 
       - name: Sign example Agent Card
@@ -204,4 +166,5 @@ jobs:
           echo "SHA: ${{ github.sha }}"
           echo "Actor: ${{ github.actor }}"
           uv run sigstore-a2a --verbose verify signed-example.json \
-            --repository ${{ github.repository }}
+            --repository ${{ github.repository }} \
+            --workflow "${{ github.workflow }}"

@@ -1,0 +1,64 @@
+name: Lint
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-format:
+    name: Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install UV
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: make install-dev
+
+      - name: Lint and type check
+        run: make lint
+        continue-on-error: true  # Allow type check failures for now, until we nail down types
+
+  licenses:
+    name: Check License Headers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify license headers
+        run: |
+          for fn in $(find . -type f -name "*.py"); do
+            if ! head -5 "$fn" | grep -q "^ *# .* License\(d*\)"; then
+              echo "::error file=$fn::${fn} is missing a license header"
+              exit 1
+            fi
+          done
+
+  all-lints-pass:
+    if: always()
+    needs:
+      - lint-and-format
+      - licenses
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all linting jobs passed
+        uses: re-actors/alls-green@v1.2.2
+        with:
+          jobs: ${{ toJSON(needs) }}
