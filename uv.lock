@@ -931,7 +931,6 @@ wheels = [
 
 [[package]]
 name = "sigstore-a2a"
-version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "a2a-sdk" },
