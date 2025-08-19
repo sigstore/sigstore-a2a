@@ -64,10 +64,10 @@ Issues = "https://github.com/sigstore/sigstore-a2a/issues"
 PyPI = "<>"
 
 [tool.hatch.version]
-path = "sigstore_a2a/__init__.py"
+path = "src/sigstore_a2a/__init__.py"
 
 [tool.hatch.build]
-packages = ["sigstore_a2a"]
+packages = ["src/sigstore_a2a"]
 
 [dependency-groups]
 dev = [

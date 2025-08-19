@@ -1,0 +1,8 @@
+site_name: sigstore-a2a
+site_url: https://sigstore.github.io/sigstore-a2a
+repo_url: https://github.com/sigstore/sigstore-a2a
+site_description: sigstore-a2a, keyless signing of A2A (Agent-to-Agent) AgentCards using Sigstore
+repo_name: sigstore-a2a
+nav:
+  - Home: index.md
+  - About: about.md
