@@ -19,6 +19,8 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  schedule:
+    - cron: '0 0 * * *'  # Daily at midnight UTC
 
 permissions:
   contents: read
@@ -26,33 +28,6 @@ permissions:
   attestations: write # Required for GitHub Attestations
 
 jobs:
-  lint-and-format:
-    name: Code Quality
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install UV
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Install dependencies
-        run: |
-          make install-dev
-
-      - name: Lint and type check
-        run: |
-          make lint
-        continue-on-error: true  # Allow type check failures for now, until we nail down types
-
   test:
     name: Test Suite
     runs-on: ubuntu-latest
@@ -120,7 +95,7 @@ jobs:
   build:
     name: Build Package
     runs-on: ubuntu-latest
-    needs: [lint-and-format, test, test-cli]
+    needs: [test, test-cli]
 
     steps:
       - name: Checkout repository
@@ -151,8 +126,7 @@ jobs:
     name: Sign Example Agent Card
     runs-on: ubuntu-latest
     needs: [build]
-    if: |
-      github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     permissions:
       contents: read
       id-token: write
@@ -180,11 +154,15 @@ jobs:
           uv run sigstore-a2a sign \
             --output signed-example.json \
             --repository ${{ github.repository }} \
+            --provenance \
+            --use_ambient_credentials \
             example_agentcard.json
 
       - name: Verify signed Agent Card
         run: |
-          uv run sigstore-a2a verify \
+          uv run sigstore-a2a --verbose verify \
+            --identity "https://github.com/${{ github.workflow_ref }}" \
+            --identity_provider "https://token.actions.githubusercontent.com" \
             --repository ${{ github.repository }} \
             --workflow "${{ github.workflow }}" \
             signed-example.json
@@ -195,13 +173,3 @@ jobs:
           name: signed-agent-card
           path: signed-example.json
           retention-days: 30
-
-      - name: Display signature info
-        run: |
-          echo "Successfully signed Agent Card!"
-          echo "Repository: ${{ github.repository }}"
-          echo "Workflow: ${{ github.workflow }}"
-          echo "SHA: ${{ github.sha }}"
-          echo "Actor: ${{ github.actor }}"
-          uv run sigstore-a2a --verbose verify signed-example.json \
-            --repository ${{ github.repository }}

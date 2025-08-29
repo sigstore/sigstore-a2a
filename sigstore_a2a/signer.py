@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +23,7 @@ from sigstore.oidc import IdentityToken, Issuer, detect_credential
 from sigstore.sign import SigningContext
 
 from .models.provenance import SLSAProvenance
-from .models.signature import SignatureBundle, SignedAgentCard, VerificationMaterial
+from .models.signature import Attestations, SignedAgentCard
 from .utils.crypto import canonicalize_json
 
 
@@ -33,22 +32,27 @@ class AgentCardSigner:
 
     def __init__(
         self,
-        issuer: Issuer | None = None,
         identity_token: str | None = None,
         trust_config: Path | None = None,
         staging: bool = False,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        use_ambient_credentials: bool = False,
+        verbose: bool = False,
     ):
         """Initialize the Agent Card signer.
 
         Args:
-            issuer: OIDC issuer for authentication
             identity_token: Pre-obtained identity token
             staging: Use Sigstore staging environment
         """
-        self.issuer = issuer
         self.identity_token = identity_token
         self.staging = staging
         self.trust_config = trust_config
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.use_ambient_credentials = use_ambient_credentials
+        self.verbose = verbose
 
     def _get_signer(self) -> SigningContext:
         """
@@ -61,13 +65,16 @@ class AgentCardSigner:
 
         if self.staging:
             self._signer = SigningContext.staging()
+            self._issuer = Issuer.staging()
         elif self.trust_config:
             trust_config = ClientTrustConfig.from_json(self.trust_config.read_text())
             self._signer = SigningContext._from_trust_config(trust_config)
+            self._issuer = Issuer(trust_config._inner.signing_config.oidc_url)
         else:
             self._signer = SigningContext.production()
+            self._issuer = Issuer.production()
 
-        return self._signer
+        return self._signer, self._issuer
 
     def sign_agent_card(
         self, agent_card: AgentCard | dict[str, Any] | str | Path, provenance_bundle: SLSAProvenance | None = None
@@ -123,7 +130,7 @@ class AgentCardSigner:
         # Build the statement
         statement = builder.build()
 
-        signing_context = self._get_signer()
+        signing_context, issuer = self._get_signer()
 
         # 1) Explicitly supplied identity token
         # 2) Ambient credential detected in the environment
@@ -135,11 +142,11 @@ class AgentCardSigner:
                 else:
                     identity = self.identity_token
 
-            elif ambient_credential := detect_credential():
+            elif self.use_ambient_credentials:
+                ambient_credential = detect_credential()
                 identity = IdentityToken(ambient_credential)
 
             else:
-                issuer = self.issuer or Issuer.production()
                 identity = issuer.identity_token()
 
             with signing_context.signer(identity, cache=True) as signer:
@@ -148,42 +155,9 @@ class AgentCardSigner:
         except Exception as e:
             raise RuntimeError(f"Failed to sign agent card: {e}") from e
 
-        # Extract transparency log entry if present
-        log_entry_dict = None
-        if hasattr(bundle, "log_entry") and bundle.log_entry:
-            # Convert LogEntry to dictionary representation
-            try:
-                # LogEntry should have a model_dump method or be serializable
-                if hasattr(bundle.log_entry, "model_dump"):
-                    log_entry_dict = bundle.log_entry.model_dump()
-                elif hasattr(bundle.log_entry, "to_dict"):
-                    log_entry_dict = bundle.log_entry.to_dict()
-                else:
-                    # Fallback: try to extract basic fields
-                    log_entry_dict = {
-                        "log_index": getattr(bundle.log_entry, "log_index", None),
-                        "log_id": getattr(bundle.log_entry, "log_id", None),
-                        "integrated_time": getattr(bundle.log_entry, "integrated_time", None),
-                    }
-            except Exception as e:
-                print(f"Error extracting log entry: {e}")
-                # If we can't extract log entry details, still include the fact that it exists
-                log_entry_dict = {"present": True}
+        attestations = Attestations(signature_bundle=bundle.to_json(), provenance_bundle=provenance_bundle)
 
-        # Store the bundle with extracted transparency log entry
-        signature_bundle = SignatureBundle(
-            signature=bundle.to_json(),  # Store entire bundle as JSON
-            certificate="",  # Certificate is included in the bundle JSON
-            certificate_chain=None,  # Chain is included in the bundle JSON
-            transparency_log_entry=log_entry_dict,
-            timestamp=datetime.now(timezone.utc),
-        )
-
-        verification_material = VerificationMaterial(
-            signature_bundle=signature_bundle, provenance_bundle=provenance_bundle
-        )
-
-        signed_card = SignedAgentCard(agent_card=parsed_card, verification_material=verification_material)
+        signed_card = SignedAgentCard(agent_card=parsed_card, attestations=attestations)
 
         return signed_card
 

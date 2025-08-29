@@ -14,7 +14,7 @@
 
 # from .agent_card import AgentCapabilities, AgentCard, AgentProvider, AgentSkill
 from .provenance import ProvenanceBuildDefinition, ProvenanceSubject, SLSAProvenance
-from .signature import SignatureBundle, SignedAgentCard
+from .signature import SignedAgentCard
 
 __all__ = [
     # "AgentCard",
@@ -24,6 +24,5 @@ __all__ = [
     "SLSAProvenance",
     "ProvenanceSubject",
     "ProvenanceBuildDefinition",
-    "SignatureBundle",
     "SignedAgentCard",
 ]

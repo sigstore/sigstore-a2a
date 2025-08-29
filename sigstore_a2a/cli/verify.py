@@ -25,33 +25,87 @@ console = Console()
 
 
 @click.command("verify")
-@click.argument("signed_card", type=click.Path(exists=True, path_type=Path))
-@click.option("--staging", is_flag=True, help="Use Sigstore staging environment")
-@click.option("--trust_config", type=click.Path(path_type=Path), help="The client trust configuration to use")
-@click.option("--repository", help="Required repository constraint (e.g., owner/repo)")
-@click.option("--workflow", help="Required workflow name constraint")
-@click.option("--actor", help="Required actor/user constraint")
-@click.option("--issuer", help="Required OIDC issuer constraint")
+@click.argument(
+    "signed_card",
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "--staging",
+    is_flag=True,
+    help="Use Sigstore staging trust roots.",
+)
+@click.option(
+    "--trust_config",
+    type=click.Path(path_type=Path),
+    metavar="CLIENT_TRUST_JSON",
+    help="Path to Sigstore ClientTrustConfig JSON.",
+)
+@click.option(
+    "--repository",
+    metavar="OWNER/REPO",
+    help="Required repository constraint.",
+)
+@click.option(
+    "--workflow",
+    metavar="WORKFLOW_NAME",
+    help="Required workflow name constraint.",
+)
+@click.option(
+    "--actor",
+    metavar="ACTOR",
+    help="Required actor/user constraint.",
+)
+@click.option(
+    "--issuer",
+    metavar="OIDC_ISSUER",
+    help="Required OIDC issuer (e.g., https://token.actions.githubusercontent.com).",
+)
+@click.option(
+    "--identity",
+    type=str,
+    metavar="SUBJECT",
+    required=True,
+    help="Expected subject (email or URI) bound in the signing certificate.",
+)
+@click.option(
+    "--identity_provider",
+    type=str,
+    metavar="PROVIDER_URL",
+    required=True,
+    help="Expected identity provider/issuer (e.g., https://accounts.google.com).",
+)
 @click.pass_context
 def verify_cmd(
     ctx: click.Context,
     signed_card: Path,
     staging: bool,
+    identity: str,
+    identity_provider: str,
     trust_config: Path | None,
     repository: str | None,
     workflow: str | None,
     actor: str | None,
     issuer: str | None,
 ) -> None:
-    """Verify a signed A2A Agent Card.
+    """
+    Verify a signed A2A Agent Card.
 
-    This command verifies the cryptographic signature and optionally checks
-    identity constraints for a signed Agent Card.
+    Args:
+      signed_card (Path): Path to the signed card JSON.
+      --staging: Use Sigstore staging trust root.
+      --trust_config PATH: Client trust config (for private Sigstore/RHTAS).
+      --repository STR: Require GitHub repo (e.g. owner/repo).
+      --workflow STR: Require GitHub workflow name.
+      --actor STR: Require GitHub actor/user.
+      --issuer URL: Require OIDC issuer (e.g. https://token.actions.githubusercontent.com).
+      --identity STR: Expected subject (email/URI).            # add a Click option if you use this
+      --identity_provider URL: Expected identity provider URL. # add a Click option if you use this
 
     Examples:
-        sigstore-a2a verify signed-card.json
-        sigstore-a2a verify signed-card.json --repository owner/repo
-        sigstore-a2a verify signed-card.json --workflow build-agent --actor user
+      uv run sigstore-a2a verify signed-card.json
+      uv run sigstore-a2a verify --repository owner/repo --workflow ci --actor octocat signed-card.json
+      uv run sigstore-a2a verify --trust_config /path/to/clienttrustconfig.json signed-card.json
+      uv run sigstore-a2a verify --identity dev@example.com --identity_provider https://accounts.google.com signed-card.json
     """
     verbose = ctx.obj.get("verbose", False)
 
@@ -75,7 +129,9 @@ def verify_cmd(
             SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console, transient=True
         ) as progress:
             progress.add_task("Initializing verifier...", total=None)
-            verifier = AgentCardVerifier(staging=staging, trust_config=trust_config)
+            verifier = AgentCardVerifier(
+                staging=staging, trust_config=trust_config, identity=identity, identity_provider=identity_provider
+            )
 
             progress.add_task("Verifying signature...", total=None)
             result = verifier.verify_signed_card(signed_card, constraints)
