@@ -134,8 +134,6 @@ def test_verify_passes_staging_flag(runner: CliRunner, sample_signed_path: Path,
     assert init is not None
     assert init.get("staging") is True
     assert init.get("trust_config") is None
-    assert init.get("identity") == "dev@example.com"
-    assert init.get("identity_provider") == "https://accounts.google.com"
 
 
 def test_verify_passes_trust_config(runner: CliRunner, sample_signed_path: Path, tmp_path: Path, monkeypatch):
@@ -180,10 +178,6 @@ def test_verify_constraints_are_forwarded(runner: CliRunner, sample_signed_path:
             "owner/repo",
             "--workflow",
             "ci",
-            "--actor",
-            "octocat",
-            "--issuer",
-            "https://token.actions.githubusercontent.com",
         ],
         obj={"verbose": True},
     )
@@ -195,8 +189,8 @@ def test_verify_constraints_are_forwarded(runner: CliRunner, sample_signed_path:
     constraints = call["constraints"]
     assert getattr(constraints, "repository", None) == "owner/repo"
     assert getattr(constraints, "workflow", None) == "ci"
-    assert getattr(constraints, "actor", None) == "octocat"
-    assert getattr(constraints, "issuer", None) == "https://token.actions.githubusercontent.com"
+    assert getattr(constraints, "identity", None) == "dev@example.com"
+    assert getattr(constraints, "identity_provider", None) == "https://accounts.google.com"
 
 
 def test_verify_requires_existing_file(runner: CliRunner, monkeypatch, tmp_path: Path):

@@ -32,21 +32,21 @@ class IdentityConstraints:
         self,
         repository: str | None = None,
         workflow: str | None = None,
-        actor: str | None = None,
-        issuer: str | None = None,
+        identity: str | None = None,
+        identity_provider: str | None = None,
     ):
         """Initialize identity constraints.
 
         Args:
             repository: Required repository (e.g., "owner/repo")
             workflow: Required workflow name or path
-            actor: Required actor/user
-            issuer: Required OIDC issuer
+            identity: Required identity
+            identity_provider: Required OIDC issuer
         """
         self.repository = repository
         self.workflow = workflow
-        self.actor = actor
-        self.issuer = issuer
+        self.identity = identity
+        self.identity_provider = identity_provider
 
 
 class VerificationResult:
@@ -87,8 +87,6 @@ class AgentCardVerifier:
         self,
         staging: bool = False,
         trust_config: Path | None = None,
-        identity: str = None,
-        identity_provider: str = None,
     ):
         """Initialize the Agent Card verifier.
 
@@ -97,8 +95,6 @@ class AgentCardVerifier:
         """
         self.staging = staging
         self.trust_config = trust_config
-        self.identity = identity
-        self.identity_provider = identity_provider
 
         self._verifier: Verifier | None = None
 
@@ -191,17 +187,12 @@ class AgentCardVerifier:
             if not workflow or workflow != constraints.workflow:
                 errors.append(f"Workflow constraint failed: expected {constraints.workflow}, got {workflow}")
 
-        if constraints.actor:
-            # Actor might be in the URI or email
+        if constraints.identity:
+            # Identity might be in the URI or email
             uri = identity.get("uri", "")
             email = identity.get("email", "")
-            if constraints.actor not in uri and constraints.actor not in email:
-                errors.append(f"Actor constraint failed: {constraints.actor} not found in identity")
-
-        if constraints.issuer:
-            issuer = identity.get("issuer")
-            if not issuer or issuer != constraints.issuer:
-                errors.append(f"Issuer constraint failed: expected {constraints.issuer}, got {issuer}")
+            if constraints.identity not in uri and constraints.identity != email:
+                errors.append(f"Identity constraint failed: {constraints.identity} not found in identity")
 
         return errors
 
@@ -209,8 +200,6 @@ class AgentCardVerifier:
         self,
         signed_card: SignedAgentCard | dict[str, Any] | str | Path,
         constraints: IdentityConstraints | None = None,
-        identity: str | None = None,
-        identity_provider: str | None = None,
     ) -> VerificationResult:
         """Verify a signed Agent Card.
 
@@ -222,8 +211,6 @@ class AgentCardVerifier:
             Verification result
         """
 
-        exp_identity = identity if identity is not None else self.identity
-        exp_issuer = identity_provider if identity_provider is not None else self.identity_provider
         try:
             # Parse signed card input
             if isinstance(signed_card, str | Path):
@@ -254,7 +241,7 @@ class AgentCardVerifier:
             try:
                 from sigstore.verify.policy import OIDCIssuer
 
-                policy = AnyOf([OIDCIssuer(exp_issuer)]) if exp_issuer else None
+                policy = AnyOf([OIDCIssuer(constraints.identity_provider)])
 
                 # Verify the bundle
                 subject, payload = verifier.verify_dsse(sig_bundle, policy)
@@ -272,33 +259,8 @@ class AgentCardVerifier:
             # Extract identity from certificate
             identity = self._extract_identity(sig_bundle.signing_certificate)
 
-            if exp_issuer:
-                actual_issuer = identity.get("issuer")
-                if actual_issuer != exp_issuer:
-                    return VerificationResult(
-                        valid=False,
-                        agent_card=agent_card,
-                        certificate=sig_bundle.signing_certificate,
-                        identity=identity,
-                        errors=[f"Issuer mismatch: expected {exp_issuer}, got {actual_issuer}"],
-                    )
-
-            if exp_identity:
-                # Accept either email (preferred) or URI/subject
-                subj = identity.get("email") or identity.get("subject") or identity.get("uri")
-                if subj != exp_identity:
-                    return VerificationResult(
-                        valid=False,
-                        agent_card=agent_card,
-                        certificate=sig_bundle.signing_certificate,
-                        identity=identity,
-                        errors=[f"Identity mismatch: expected {exp_identity}, got {subj}"],
-                    )
-
-            # Check constraints if provided
             constraint_errors = []
-            if constraints:
-                constraint_errors = self._check_constraints(identity, constraints)
+            constraint_errors = self._check_constraints(identity, constraints)
 
             if constraint_errors:
                 return VerificationResult(

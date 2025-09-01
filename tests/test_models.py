@@ -76,7 +76,7 @@ class TestProvenance:
 
     def test_provenance_subject(self):
         """Test provenance subject creation."""
-        subject = ProvenanceSubject(name="test-agent", digest=DigestSet(sha256="abc123", sha1="def456"))
+        subject = ProvenanceSubject(name="test-agent", digest=DigestSet(sha256="abc123", sha512="def456"))
 
         assert subject.name == "test-agent"
         assert subject.digest.sha256 == "abc123"
@@ -85,4 +85,3 @@ class TestProvenance:
         """Test digest set validation."""
         digest = DigestSet(sha256="test-hash")
         assert digest.sha256 == "test-hash"
-        assert digest.sha1 is None

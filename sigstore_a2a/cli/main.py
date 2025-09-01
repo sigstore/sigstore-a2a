@@ -90,7 +90,6 @@ _identity = click.option(
     "--identity",
     type=str,
     metavar="IDENTITY",
-    required=True,
     help="Expected identity of the signer (e.g., name@example.com).",
 )
 _identity_provider = click.option(
@@ -101,8 +100,6 @@ _identity_provider = click.option(
     help="Expected identity provider (e.g., https://accounts.example.com).",
 )
 _workflow = click.option("--workflow", help="Required workflow name constraint.")
-_actor = click.option("--actor", help="Required actor/user constraint.")
-_issuer = click.option("--issuer", help="Required OIDC issuer constraint.")
 
 # Serve options
 _host = click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind to.")
@@ -159,8 +156,6 @@ def sign_cmd_direct(ctx: click.Context, **kwargs):
 @_trust_config
 @_repository
 @_workflow
-@_actor
-@_issuer
 @click.pass_context
 def verify_cmd_direct(ctx: click.Context, **kwargs):
     """Verify a signed Agent Card."""

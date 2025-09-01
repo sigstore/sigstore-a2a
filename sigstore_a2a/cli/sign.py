@@ -60,7 +60,6 @@ console = Console()
 @click.option(
     "--provenance",
     is_flag=True,
-    default=False,
     help="Generate and embed SLSA provenance.",
 )
 @click.option(
@@ -104,8 +103,8 @@ def sign_cmd(
     ctx: click.Context,
     agent_card: Path,
     output: Path | None,
-    use_ambient_credentials: bool = False,
-    staging: bool = False,
+    use_ambient_credentials: bool,
+    staging: bool,
     trust_config: Path | None = None,
     provenance: bool = False,
     identity_token: str | None = None,
@@ -230,7 +229,13 @@ def sign_cmd(
             progress.add_task("Writing signed Agent Card...", total=None)
             out_path.parent.mkdir(parents=True, exist_ok=True)
             with open(out_path, "w", encoding="utf-8", newline="\n") as f:
-                json.dump(signed_card.model_dump(by_alias=True), f, indent=2, ensure_ascii=False, default=str)
+                json.dump(
+                    signed_card.model_dump(by_alias=True, exclude_none=True),
+                    f,
+                    indent=2,
+                    ensure_ascii=False,
+                    default=str,
+                )
 
         console.print("[green]✓[/green] Agent Card signed successfully")
         console.print(f"[blue]Signed card written to: {out_path}[/blue]")

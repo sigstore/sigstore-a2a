@@ -35,7 +35,7 @@ class _DummySigned:
     def __init__(self, card: dict):
         self._card = card
 
-    def model_dump(self, by_alias: bool = True) -> dict:
+    def model_dump(self, by_alias: bool = True, exclude_none: bool = True) -> dict:
         # Minimal structure your CLI writes back out
         return {
             "agentCard": self._card,
