@@ -19,7 +19,6 @@ from typing import Any
 from a2a.types import AgentCard
 from cryptography import x509
 from sigstore._internal.trust import ClientTrustConfig
-from sigstore.models import Bundle
 from sigstore.verify import Verifier
 from sigstore.verify.policy import AnyOf
 
@@ -33,21 +32,21 @@ class IdentityConstraints:
         self,
         repository: str | None = None,
         workflow: str | None = None,
-        actor: str | None = None,
-        issuer: str | None = None,
+        identity: str | None = None,
+        identity_provider: str | None = None,
     ):
         """Initialize identity constraints.
 
         Args:
             repository: Required repository (e.g., "owner/repo")
             workflow: Required workflow name or path
-            actor: Required actor/user
-            issuer: Required OIDC issuer
+            identity: Required identity
+            identity_provider: Required OIDC issuer
         """
         self.repository = repository
         self.workflow = workflow
-        self.actor = actor
-        self.issuer = issuer
+        self.identity = identity
+        self.identity_provider = identity_provider
 
 
 class VerificationResult:
@@ -84,7 +83,11 @@ class VerificationResult:
 class AgentCardVerifier:
     """Verifies signed A2A Agent Cards using Sigstore."""
 
-    def __init__(self, staging: bool = False, trust_config: Path | None = None):
+    def __init__(
+        self,
+        staging: bool = False,
+        trust_config: Path | None = None,
+    ):
         """Initialize the Agent Card verifier.
 
         Args:
@@ -92,6 +95,8 @@ class AgentCardVerifier:
         """
         self.staging = staging
         self.trust_config = trust_config
+
+        self._verifier: Verifier | None = None
 
     def _get_verifier(self) -> Verifier:
         """
@@ -101,6 +106,9 @@ class AgentCardVerifier:
         custom trust configuration, and defaults to the production environment.
         This ensures the correct root of trust is used for verification.
         """
+        if self._verifier is not None:
+            return self._verifier
+
         if self.staging:
             self._verifier = Verifier.staging()
         elif self.trust_config:
@@ -108,6 +116,7 @@ class AgentCardVerifier:
             self._verifier = Verifier._from_trust_config(trust_config)
         else:
             self._verifier = Verifier.production()
+
         return self._verifier
 
     def _extract_identity(self, certificate: x509.Certificate) -> dict[str, Any]:
@@ -119,7 +128,7 @@ class AgentCardVerifier:
         Returns:
             Dictionary containing identity information
         """
-        identity = {}
+        identity: dict[str, Any] = {}
 
         # Extract subject alternative names
         try:
@@ -166,7 +175,7 @@ class AgentCardVerifier:
         Returns:
             List of constraint violations (empty if all pass)
         """
-        errors = []
+        errors: list[str] = []
 
         if constraints.repository:
             repo = identity.get("github_workflow_repository")
@@ -178,22 +187,19 @@ class AgentCardVerifier:
             if not workflow or workflow != constraints.workflow:
                 errors.append(f"Workflow constraint failed: expected {constraints.workflow}, got {workflow}")
 
-        if constraints.actor:
-            # Actor might be in the URI or email
+        if constraints.identity:
+            # Identity might be in the URI or email
             uri = identity.get("uri", "")
             email = identity.get("email", "")
-            if constraints.actor not in uri and constraints.actor not in email:
-                errors.append(f"Actor constraint failed: {constraints.actor} not found in identity")
-
-        if constraints.issuer:
-            issuer = identity.get("issuer")
-            if not issuer or issuer != constraints.issuer:
-                errors.append(f"Issuer constraint failed: expected {constraints.issuer}, got {issuer}")
+            if constraints.identity not in uri and constraints.identity != email:
+                errors.append(f"Identity constraint failed: {constraints.identity} not found in identity")
 
         return errors
 
     def verify_signed_card(
-        self, signed_card: SignedAgentCard | dict[str, Any] | str | Path, constraints: IdentityConstraints | None = None
+        self,
+        signed_card: SignedAgentCard | dict[str, Any] | str | Path,
+        constraints: IdentityConstraints | None = None,
     ) -> VerificationResult:
         """Verify a signed Agent Card.
 
@@ -204,6 +210,7 @@ class AgentCardVerifier:
         Returns:
             Verification result
         """
+
         try:
             # Parse signed card input
             if isinstance(signed_card, str | Path):
@@ -227,33 +234,21 @@ class AgentCardVerifier:
 
             # Extract agent card and signature bundle
             agent_card = parsed_signed_card.agent_card
-            sig_bundle = parsed_signed_card.verification_material.signature_bundle
-
-            # Canonicalize agent card for verification
-            # canonical_data = canonicalize_json(agent_card.model_dump(by_alias=True))
+            sig_bundle = parsed_signed_card.attestations.signature_bundle
 
             # Sigstore verification
-            try:
-                # Try to reconstruct bundle from signature (which should be JSON in real mode)
-                bundle = Bundle.from_json(sig_bundle.signature)
-            except Exception as e:
-                return VerificationResult(valid=False, errors=[f"Failed to parse Sigstore bundle: {e}"])
-
-            # Verify with GitHub Actions OIDC issuer validation
             verifier = self._get_verifier()
             try:
-                # Use OIDCIssuer to validate that the certificate came from GitHub Actions
-                # This is more reliable than trying to match specific identity strings
                 from sigstore.verify.policy import OIDCIssuer
 
-                policy = AnyOf([OIDCIssuer("https://token.actions.githubusercontent.com")])
+                policy = AnyOf([OIDCIssuer(constraints.identity_provider)])
 
                 # Verify the bundle
-                subject, payload = verifier.verify_dsse(bundle, policy)
+                subject, payload = verifier.verify_dsse(sig_bundle, policy)
             except Exception as e:
                 # If verification fails, include the actual identity for debugging
                 try:
-                    actual_identity = self._extract_identity(bundle.signing_certificate)
+                    actual_identity = self._extract_identity(sig_bundle.signing_certificate)
                     error_msg = f"Signature verification failed: {e}"
                     if actual_identity:
                         error_msg += f" (Certificate identity: issuer={actual_identity.get('issuer')}, subject={actual_identity.get('subject')})"
@@ -262,31 +257,22 @@ class AgentCardVerifier:
                     return VerificationResult(valid=False, errors=[f"Signature verification failed: {e}"])
 
             # Extract identity from certificate
-            identity = self._extract_identity(bundle.signing_certificate)
+            identity = self._extract_identity(sig_bundle.signing_certificate)
 
-            # Add transparency log information if available
-            if hasattr(bundle, "log_entry") and bundle.log_entry:
-                if hasattr(bundle.log_entry, "log_index"):
-                    log_index = bundle.log_entry.log_index
-                    identity["transparency_log_index"] = log_index
-                    identity["transparency_log_url"] = f"https://search.sigstore.dev/?logIndex={log_index}"
-
-            # Check constraints if provided
             constraint_errors = []
-            if constraints:
-                constraint_errors = self._check_constraints(identity, constraints)
+            constraint_errors = self._check_constraints(identity, constraints)
 
             if constraint_errors:
                 return VerificationResult(
                     valid=False,
                     agent_card=agent_card,
-                    certificate=bundle.signing_certificate,
+                    certificate=sig_bundle.signing_certificate,
                     identity=identity,
                     errors=constraint_errors,
                 )
 
             return VerificationResult(
-                valid=True, agent_card=agent_card, certificate=bundle.signing_certificate, identity=identity
+                valid=True, agent_card=agent_card, certificate=sig_bundle.signing_certificate, identity=identity
             )
 
         except Exception as e:

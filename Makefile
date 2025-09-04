@@ -34,21 +34,21 @@ test: ## Run all tests (unit + integration + e2e)
 
 # Code quality
 lint: ## Run linting checks
-	uv run ruff check sigstore-a2a/ tests/
+	uv run ruff check sigstore_a2a/ tests/
 
 lint-fix: ## Fix linting issues automatically
-	uv run ruff check --fix sigstore-a2a/ tests/
-	uv run ruff format sigstore-a2a/ tests/
+	uv run ruff check --fix sigstore_a2a/ tests/
+	uv run ruff format sigstore_a2a/ tests/
 
 format: ## Format code with ruff
-	uv run ruff format sigstore-a2a/ tests/
+	uv run ruff format sigstore_a2a/ tests/
 
 format-check: ## Check code formatting
-	uv run ruff format --check sigstore-a2a/ tests/
+	uv run ruff format --check sigstore_a2a/ tests/
 
 # Security scanning
 security: ## Run bandit security scan
-	uv run bandit -r sigstore-a2a/ -ll
+	uv run bandit -r sigstore_a2a/ -ll
 
 # Build and release
 build: ## Build package

@@ -32,8 +32,6 @@ def compute_digest(data: bytes, algorithm: str = "sha256") -> str:
     """
     if algorithm == "sha256":
         return hashlib.sha256(data).hexdigest()
-    elif algorithm == "sha1":
-        return hashlib.sha1(data).hexdigest()
     elif algorithm == "sha512":
         return hashlib.sha512(data).hexdigest()
     else:

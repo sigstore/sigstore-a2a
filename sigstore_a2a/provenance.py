@@ -75,7 +75,6 @@ class ProvenanceBuilder:
         # Compute digests
         digest_set = DigestSet(
             sha256=compute_digest(canonical_data, "sha256"),
-            sha1=compute_digest(canonical_data, "sha1"),
             sha512=compute_digest(canonical_data, "sha512"),
         )
 

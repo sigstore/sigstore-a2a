@@ -22,7 +22,6 @@ class DigestSet(BaseModel):
     """A set of cryptographic digests for an artifact."""
 
     sha256: str | None = Field(None, description="SHA-256 digest")
-    sha1: str | None = Field(None, description="SHA-1 digest")
     sha512: str | None = Field(None, description="SHA-512 digest")
 
 

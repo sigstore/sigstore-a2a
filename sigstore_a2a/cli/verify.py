@@ -25,39 +25,115 @@ console = Console()
 
 
 @click.command("verify")
-@click.argument("signed_card", type=click.Path(exists=True, path_type=Path))
-@click.option("--staging", is_flag=True, help="Use Sigstore staging environment")
-@click.option("--trust_config", type=click.Path(path_type=Path), help="The client trust configuration to use")
-@click.option("--repository", help="Required repository constraint (e.g., owner/repo)")
-@click.option("--workflow", help="Required workflow name constraint")
-@click.option("--actor", help="Required actor/user constraint")
-@click.option("--issuer", help="Required OIDC issuer constraint")
+@click.argument(
+    "signed_card",
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "--staging",
+    is_flag=True,
+    help="Use Sigstore staging trust roots.",
+)
+@click.option(
+    "--trust_config",
+    type=click.Path(path_type=Path),
+    metavar="CLIENT_TRUST_JSON",
+    help="Path to Sigstore ClientTrustConfig JSON.",
+)
+@click.option(
+    "--repository",
+    metavar="OWNER/REPO",
+    help="Required repository constraint.",
+)
+@click.option(
+    "--workflow",
+    metavar="WORKFLOW_NAME",
+    help="Required workflow name constraint.",
+)
+@click.option(
+    "--identity",
+    type=str,
+    metavar="SUBJECT",
+    required=True,
+    help="Expected subject (email or URI) bound in the signing certificate.",
+)
+@click.option(
+    "--identity_provider",
+    type=str,
+    metavar="PROVIDER_URL",
+    required=True,
+    help="Expected identity provider/issuer (e.g., https://accounts.google.com).",
+)
 @click.pass_context
 def verify_cmd(
     ctx: click.Context,
     signed_card: Path,
     staging: bool,
-    trust_config: Path | None,
-    repository: str | None,
-    workflow: str | None,
-    actor: str | None,
-    issuer: str | None,
+    identity_provider: str,
+    identity: str | None = None,
+    trust_config: Path | None = None,
+    repository: str | None = None,
+    workflow: str | None = None,
 ) -> None:
-    """Verify a signed A2A Agent Card.
+    """
+    Verify a signed A2A Agent Card using a Sigstore Bundle and identity constraints.
 
-    This command verifies the cryptographic signature and optionally checks
-    identity constraints for a signed Agent Card.
+    This command:
+      • Loads a signed Agent Card JSON file.
+      • Extracts the embedded Sigstore bundle and verifies the DSSE signature,
+        certificate chain, and Rekor transparency log inclusion (per trust root).
+      • Enforces signer identity checks via:
+          – --identity_provider (required): expected OIDC issuer URL.
+      • (Optionally) enforces additional constraints such as repository, workflow,
+        or identity when the corresponding flags are provided.
+
+    Trust roots:
+      • --staging uses Sigstore’s staging Fulcio/Rekor.
+      • --trust_config points to a Sigstore Client Trust Configuration JSON
+        (e.g., a private Sigstore instance).
+      • If neither is supplied, the production trust root is used.
+      • Do not combine --staging and --trust_config.
+
+    Output/behavior:
+      • Exits non-zero on any verification or constraint failure.
+      • With --verbose, prints certificate/identity details for diagnostics.
 
     Examples:
-        sigstore-a2a verify signed-card.json
-        sigstore-a2a verify signed-card.json --repository owner/repo
-        sigstore-a2a verify signed-card.json --workflow build-agent --actor user
+      # Minimal verification with required identity + IdP
+      sigstore-a2a verify \
+        --identity dev@example.com \
+        --identity_provider https://accounts.google.com \
+        signed-card.json
+
+      # Enforce GitHub repository + workflow constraints
+      sigstore-a2a verify \
+        --identity "https://github.com/owner/repo/.github/workflows/ci.yml@refs/heads/main" \
+        --identity_provider https://token.actions.githubusercontent.com \
+        --repository owner/repo \
+        --workflow ci \
+        signed-card.json
+
+      # Use a private trust configuration
+      sigstore-a2a verify \
+        --identity dev@example.com \
+        --identity_provider https://accounts.google.com \
+        --trust_config ./client-trust-config.json \
+        signed-card.json
+
+      # Use Sigstore staging for sandbox testing
+      sigstore-a2a verify \
+        --identity dev@example.com \
+        --identity_provider https://accounts.google.com \
+        --staging \
+        signed-card.json
     """
     verbose = ctx.obj.get("verbose", False)
 
     constraints = None
-    if any([repository, workflow, actor, issuer]):
-        constraints = IdentityConstraints(repository=repository, workflow=workflow, actor=actor, issuer=issuer)
+    if any([repository, workflow, identity, identity_provider]):
+        constraints = IdentityConstraints(
+            repository=repository, workflow=workflow, identity=identity, identity_provider=identity_provider
+        )
 
         if verbose:
             console.print("[blue]Identity constraints:[/blue]")
@@ -65,10 +141,10 @@ def verify_cmd(
                 console.print(f"  Repository: {repository}")
             if workflow:
                 console.print(f"  Workflow: {workflow}")
-            if actor:
-                console.print(f"  Actor: {actor}")
-            if issuer:
-                console.print(f"  Issuer: {issuer}")
+            if identity:
+                console.print(f"  Identity: {identity}")
+            if identity_provider:
+                console.print(f"  Issuer: {identity_provider}")
 
     try:
         with Progress(

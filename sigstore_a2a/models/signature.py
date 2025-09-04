@@ -12,49 +12,53 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datetime import datetime
+import json
 from typing import Any
 
 from a2a.types import AgentCard
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
+from sigstore.models import Bundle
 
 from .provenance import SLSAProvenance
 
 
-class SignatureBundle(BaseModel):
-    """Sigstore signature bundle containing signature and verification materials."""
-
-    signature: str = Field(..., description="Base64-encoded signature")
-    certificate: str = Field(..., description="X.509 certificate in PEM format")
-    certificate_chain: list[str] | None = Field(
-        None, alias="certificateChain", description="X.509 certificate chain in PEM format"
-    )
-    transparency_log_entry: dict[str, Any] | None = Field(
-        None, alias="transparencyLogEntry", description="Rekor transparency log entry"
-    )
-    timestamp: datetime = Field(..., description="Timestamp when signature was created")
-
-    model_config = {"populate_by_name": True}
-
-
-class VerificationMaterial(BaseModel):
+class Attestations(BaseModel):
     """Verification material for Agent Card signatures."""
 
-    signature_bundle: SignatureBundle = Field(..., alias="signatureBundle", description="Sigstore signature bundle")
+    signature_bundle: Bundle = Field(..., alias="signatureBundle", description="Sigstore signature bundle")
     provenance_bundle: SLSAProvenance | None = Field(
         None, alias="provenanceBundle", description="SLSA provenance attestation"
     )
 
-    model_config = {"populate_by_name": True}
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,  # allow non-Pydantic Bundle objects
+        populate_by_name=True,
+        extra="ignore",
+    )
+
+    @field_validator("signature_bundle", mode="before")
+    @classmethod
+    def _bundle_in(cls, v):
+        if v is None or isinstance(v, Bundle):
+            return v
+        if isinstance(v, dict):
+            return Bundle.from_json(json.dumps(v))
+        if isinstance(v, str):
+            return Bundle.from_json(v)
+        raise TypeError("Expected sigstore.models.Bundle, dict, or JSON string")
+
+    @field_serializer("signature_bundle")
+    def _bundle_out(self, v: Bundle, _info):
+        if v is None:
+            return None
+        return json.loads(v.to_json())
 
 
 class SignedAgentCard(BaseModel):
     """Agent Card with cryptographic signature and provenance."""
 
     agent_card: AgentCard = Field(..., alias="agentCard", description="The A2A Agent Card")
-    verification_material: VerificationMaterial = Field(
-        ..., alias="verificationMaterial", description="Cryptographic verification material"
-    )
+    attestations: Attestations = Field(..., description="Cryptographic attestation of the Agent Card")
 
     model_config = {"populate_by_name": True}
 
@@ -73,7 +77,14 @@ class SignedAgentCard(BaseModel):
         """Get the agent URL."""
         return str(self.agent_card.url)
 
-    @property
-    def signature_timestamp(self) -> datetime:
-        """Get the signature timestamp."""
-        return self.verification_material.signature_bundle.timestamp
+
+def _to_jsonable(v: Any) -> Any:
+    if v is None:
+        return None
+    # BetterProto / dataclass style:
+    if hasattr(v, "to_json") and callable(v.to_json):
+        return json.loads(v.to_json())
+    if hasattr(v, "to_dict") and callable(v.to_dict):
+        return v.to_dict()
+    # Fallback: already a dict or Pydantic model
+    return v

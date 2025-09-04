@@ -17,7 +17,6 @@ from a2a.types import AgentCard
 from pydantic import ValidationError
 
 from sigstore_a2a.models.provenance import DigestSet, ProvenanceSubject
-from sigstore_a2a.models.signature import SignatureBundle
 
 
 class TestAgentCard:
@@ -77,7 +76,7 @@ class TestProvenance:
 
     def test_provenance_subject(self):
         """Test provenance subject creation."""
-        subject = ProvenanceSubject(name="test-agent", digest=DigestSet(sha256="abc123", sha1="def456"))
+        subject = ProvenanceSubject(name="test-agent", digest=DigestSet(sha256="abc123", sha512="def456"))
 
         assert subject.name == "test-agent"
         assert subject.digest.sha256 == "abc123"
@@ -86,17 +85,3 @@ class TestProvenance:
         """Test digest set validation."""
         digest = DigestSet(sha256="test-hash")
         assert digest.sha256 == "test-hash"
-        assert digest.sha1 is None
-
-
-class TestSignature:
-    """Test signature and bundle models."""
-
-    def test_signature_bundle(self):
-        """Test signature bundle creation."""
-        from datetime import datetime
-
-        bundle = SignatureBundle(signature="test-signature", certificate="test-cert", timestamp=datetime.utcnow())
-
-        assert bundle.signature == "test-signature"
-        assert bundle.certificate == "test-cert"
