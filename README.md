@@ -23,7 +23,7 @@ This library enables verifiable supply chain security for A2A agents by providin
 
 ```bash
 # Install from source using UV (recommended)
-git clone https://github.com/RedDotRocket/sigstore-a2a
+git clone https://github.com/sigstore/sigstore-a2a
 cd sigstore-a2a
 uv sync --prerelease=allow
 
