@@ -52,21 +52,26 @@ jobs:
         run: |
           uv build
 
+      - name: Store beacon token into oidc-token.txt
+        uses: sigstore-conformance/extremely-dangerous-public-oidc-beacon@5c7bac23e5652132c019d1273c94384412b9ef76 # main
+
       - name: Sign release Agent Card
         env:
           UV_PRERELEASE: allow
         run: |
           uv run sigstore-a2a sign example_agentcard.json \
             --output release-signed-agent-card.json \
-            --repository ${{ github.repository }}
+            --repository ${{ github.repository }} \
+            --identity_token "$(cat oidc-token.txt)"
 
       - name: Verify release Agent Card
         env:
           UV_PRERELEASE: allow
         run: |
           uv run sigstore-a2a verify release-signed-agent-card.json \
-            --repository ${{ github.repository }} \
-            --workflow "${{ github.workflow }}"
+            --identity_provider "https://token.actions.githubusercontent.com" \
+            --repository "sigstore-conformance/extremely-dangerous-public-oidc-beacon" \
+            --workflow "Extremely dangerous OIDC beacon"
 
       - name: Generate changelog
         id: changelog

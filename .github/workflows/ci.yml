@@ -127,7 +127,6 @@ jobs:
     name: Sign Example Agent Card
     runs-on: ubuntu-latest
     needs: [build]
-    if: github.ref == 'refs/heads/main'
     permissions:
       contents: read
       id-token: write
@@ -150,22 +149,24 @@ jobs:
         run: |
           make install
 
+      - name: Store beacon token into oidc-token.txt
+        uses: sigstore-conformance/extremely-dangerous-public-oidc-beacon@5c7bac23e5652132c019d1273c94384412b9ef76 # main
+
       - name: Sign example Agent Card
         run: |
           uv run sigstore-a2a sign \
             --output signed-example.json \
             --repository ${{ github.repository }} \
             --provenance \
-            --use_ambient_credentials \
+            --identity_token "$(cat oidc-token.txt)" \
             example_agentcard.json
 
       - name: Verify signed Agent Card
         run: |
           uv run sigstore-a2a --verbose verify \
-            --identity "https://github.com/${{ github.workflow_ref }}" \
             --identity_provider "https://token.actions.githubusercontent.com" \
-            --repository ${{ github.repository }} \
-            --workflow "${{ github.workflow }}" \
+            --repository "sigstore-conformance/extremely-dangerous-public-oidc-beacon" \
+            --workflow "Extremely dangerous OIDC beacon" \
             signed-example.json
 
       - name: Upload signed Agent Card
