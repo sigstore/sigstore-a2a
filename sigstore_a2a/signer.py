@@ -17,8 +17,8 @@ from pathlib import Path
 from typing import Any
 
 from a2a.types import AgentCard
-from sigstore._internal.trust import ClientTrustConfig
 from sigstore.dsse import DigestSet, StatementBuilder, Subject
+from sigstore.models import ClientTrustConfig
 from sigstore.oidc import IdentityToken, Issuer, detect_credential
 from sigstore.sign import SigningContext
 
@@ -54,7 +54,10 @@ class AgentCardSigner:
         self.use_ambient_credentials = use_ambient_credentials
         self.verbose = verbose
 
-    def _get_signer(self) -> SigningContext:
+        self._signer: SigningContext | None = None
+        self._issuer: Issuer | None = None
+
+    def _get_signer(self) -> tuple[SigningContext, Issuer]:
         """
         Retrieves or creates a Sigstore signer instance based on the configuration.
 
@@ -62,17 +65,19 @@ class AgentCardSigner:
         custom trust configuration, and defaults to the production environment
         for signing operations. This ensures the correct root of trust is used.
         """
+        if self._signer is not None and self._issuer is not None:
+            return self._signer, self._issuer
 
         if self.staging:
-            self._signer = SigningContext.staging()
-            self._issuer = Issuer.staging()
+            trust_config = ClientTrustConfig.staging()
         elif self.trust_config:
             trust_config = ClientTrustConfig.from_json(self.trust_config.read_text())
-            self._signer = SigningContext._from_trust_config(trust_config)
-            self._issuer = Issuer(trust_config._inner.signing_config.oidc_url)
         else:
-            self._signer = SigningContext.production()
-            self._issuer = Issuer.production()
+            trust_config = ClientTrustConfig.production()
+
+        self._signer = SigningContext.from_trust_config(trust_config)
+        oidc_issuer = trust_config.signing_config.get_oidc_url()
+        self._issuer = Issuer(oidc_issuer)
 
         return self._signer, self._issuer
 

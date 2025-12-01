@@ -32,7 +32,6 @@ jobs:
 
       - name: Lint and type check
         run: make lint
-        continue-on-error: true  # Allow type check failures for now, until we nail down types
 
   licenses:
     name: Check License Headers

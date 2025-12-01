@@ -52,7 +52,11 @@ def create_app(signed_card_path: Path, verify_on_serve: bool = True, staging: bo
             app_state["agent_card_data"] = signed_card.agent_card.model_dump(by_alias=True, mode="json")
 
             if verify_on_serve:
-                verifier = AgentCardVerifier(staging=staging)
+                verifier = AgentCardVerifier(
+                    identity=None,
+                    oidc_issuer=None,
+                    staging=staging,
+                )
                 result = verifier.verify_signed_card(signed_card)
 
                 if not result.valid:
