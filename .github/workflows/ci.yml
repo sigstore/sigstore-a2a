@@ -205,7 +205,7 @@ jobs:
           make build
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: dist-${{ matrix.os }}
           path: dist/
@@ -273,7 +273,7 @@ jobs:
             signed-example.json
 
       - name: Upload signed Agent Card
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: signed-agent-card
           path: signed-example.json

@@ -82,7 +82,7 @@ jobs:
           uv run bandit -r sigstore-a2a -f json -o bandit-report.json || true
 
       - name: Upload security scan results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: security-reports
           path: |
