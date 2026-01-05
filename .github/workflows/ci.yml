@@ -253,7 +253,7 @@ jobs:
           make install
 
       - name: Store beacon token into oidc-token.txt
-        uses: sigstore-conformance/extremely-dangerous-public-oidc-beacon@79586c1dead8b88fbfa9a7882da116decf674a42 # main
+        uses: sigstore-conformance/extremely-dangerous-public-oidc-beacon@1e3cabecd3790f48b79a795424e12fa3cb880dcb # main
 
       - name: Sign example Agent Card
         run: |
