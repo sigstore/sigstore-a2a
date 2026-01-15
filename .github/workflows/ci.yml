@@ -20,8 +20,6 @@ on:
   pull_request:
     branches: [main, develop]
   workflow_dispatch: {}
-  schedule:
-    - cron: '0 0 * * *'  # Daily at midnight UTC
 
 permissions:
   contents: read
@@ -29,12 +27,63 @@ permissions:
   attestations: write # Required for GitHub Attestations
 
 jobs:
-  test:
-    name: Test Suite
+  # Minimal test on push (cheap) - single Python version, single OS
+  test-minimal:
+    name: Test Suite (Minimal)
     runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+
+      - name: Cache UV dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/uv
+            %LOCALAPPDATA%\uv\cache
+          key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
+      - name: Install dependencies
+        run: |
+          make install-dev
+
+      - name: Run tests
+        run: |
+          make test
+
+  # Full test matrix on PR only (expensive)
+  test:
+    name: Test Suite - Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    if: github.event_name == 'pull_request'
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ['3.11', '3.12']
+        python-version: ['3.11', '3.12', '3.13']
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        exclude:
+          # Reduce matrix size - test all Python versions on Linux, but only latest on macOS/Windows
+          - os: macos-latest
+            python-version: '3.11'
+          - os: macos-latest
+            python-version: '3.12'
+          - os: windows-latest
+            python-version: '3.11'
+          - os: windows-latest
+            python-version: '3.12'
 
     steps:
       - name: Checkout repository
@@ -46,9 +95,19 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install UV
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+
+      - name: Cache UV dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/uv
+            %LOCALAPPDATA%\uv\cache
+          key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
 
       - name: Install dependencies
         run: |
@@ -65,8 +124,12 @@ jobs:
           fail_ci_if_error: false
 
   test-cli:
-    name: CLI Integration Tests
-    runs-on: ubuntu-latest
+    name: CLI Integration Tests - ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
+    runs-on: ${{ matrix.os }}
+    if: github.event_name == 'pull_request'
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - name: Checkout repository
@@ -75,12 +138,22 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6
         with:
-          python-version: '3.11'
+          python-version: '3.13'
 
       - name: Install UV
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+
+      - name: Cache UV dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/uv
+            %LOCALAPPDATA%\uv\cache
+          key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
 
       - name: Install dependencies
         run: |
@@ -94,9 +167,13 @@ jobs:
 
 
   build:
-    name: Build Package
-    runs-on: ubuntu-latest
+    name: Build Package - ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
+    runs-on: ${{ matrix.os }}
+    if: github.event_name == 'pull_request'
     needs: [test, test-cli]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - name: Checkout repository
@@ -105,12 +182,22 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6
         with:
-          python-version: '3.11'
+          python-version: '3.13'
 
       - name: Install UV
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+
+      - name: Cache UV dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/uv
+            %LOCALAPPDATA%\uv\cache
+          key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
 
       - name: Build package
         run: |
@@ -119,15 +206,19 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: dist
+          name: dist-${{ matrix.os }}
           path: dist/
           retention-days: 7
 
   sign-agent-card:
     name: Sign Example Agent Card
     runs-on: ubuntu-latest
-    needs: [build]
-    if: github.ref == 'refs/heads/main'
+    needs: [test-minimal, test, test-cli]
+    if: |
+      always() && (
+        (github.event_name == 'push' && needs.test-minimal.result == 'success') ||
+        (github.event_name == 'pull_request' && needs.test.result == 'success' && needs.test-cli.result == 'success')
+      )
     permissions:
       contents: read
       id-token: write
@@ -139,16 +230,29 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6
         with:
-          python-version: '3.11'
+          python-version: '3.13'
 
       - name: Install UV
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+
+      - name: Cache UV dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/uv
+            %LOCALAPPDATA%\uv\cache
+          key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
 
       - name: Install dependencies
         run: |
           make install
+
+      - name: Store beacon token into oidc-token.txt
+        uses: sigstore-conformance/extremely-dangerous-public-oidc-beacon@1e3cabecd3790f48b79a795424e12fa3cb880dcb # main
 
       - name: Sign example Agent Card
         run: |
@@ -156,16 +260,15 @@ jobs:
             --output signed-example.json \
             --repository ${{ github.repository }} \
             --provenance \
-            --use_ambient_credentials \
+            --identity_token "$(cat oidc-token.txt)" \
             example_agentcard.json
 
       - name: Verify signed Agent Card
         run: |
           uv run sigstore-a2a --verbose verify \
-            --identity "https://github.com/${{ github.workflow_ref }}" \
             --identity_provider "https://token.actions.githubusercontent.com" \
-            --repository ${{ github.repository }} \
-            --workflow "${{ github.workflow }}" \
+            --repository "sigstore-conformance/extremely-dangerous-public-oidc-beacon" \
+            --workflow "Extremely dangerous OIDC beacon" \
             signed-example.json
 
       - name: Upload signed Agent Card

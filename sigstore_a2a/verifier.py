@@ -18,7 +18,7 @@ from typing import Any
 
 from a2a.types import AgentCard
 from cryptography import x509
-from sigstore._internal.trust import ClientTrustConfig
+from sigstore.models import ClientTrustConfig
 from sigstore.verify import Verifier
 from sigstore.verify.policy import AnyOf
 
@@ -85,14 +85,22 @@ class AgentCardVerifier:
 
     def __init__(
         self,
+        identity: str | None = None,
+        oidc_issuer: str | None = None,
         staging: bool = False,
         trust_config: Path | None = None,
     ):
         """Initialize the Agent Card verifier.
 
         Args:
+            identity: The expected identity that has signed the model
+            oidc_issuer: The expected OpenID Connect issuer that provided the
+              certificate used for the signature
             staging: Use Sigstore staging environment
+            trust_config: A path to a custom trust configuration
         """
+        self.identity = identity
+        self.oidc_issuer = oidc_issuer
         self.staging = staging
         self.trust_config = trust_config
 
@@ -109,13 +117,18 @@ class AgentCardVerifier:
         if self._verifier is not None:
             return self._verifier
 
-        if self.staging:
-            self._verifier = Verifier.staging()
-        elif self.trust_config:
-            trust_config = ClientTrustConfig.from_json(self.trust_config.read_text())
-            self._verifier = Verifier._from_trust_config(trust_config)
+        if self.trust_config:
+            trust_config = ClientTrustConfig.from_json(
+                self.trust_config.read_text()
+            )
+        elif self.staging:
+            trust_config = ClientTrustConfig.staging()
         else:
-            self._verifier = Verifier.production()
+            trust_config = ClientTrustConfig.production()
+
+        self._verifier = Verifier(
+            trusted_root=trust_config.trusted_root
+        )
 
         return self._verifier
 

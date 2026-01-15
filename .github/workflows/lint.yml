@@ -24,15 +24,24 @@ jobs:
           python-version: '3.11'
 
       - name: Install UV
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+
+      - name: Cache UV dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/uv
+            %LOCALAPPDATA%\uv\cache
+          key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
       - name: Install dependencies
         run: make install-dev
 
       - name: Lint and type check
         run: make lint
-        continue-on-error: true  # Allow type check failures for now, until we nail down types
 
   licenses:
     name: Check License Headers

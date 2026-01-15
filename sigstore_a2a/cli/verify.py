@@ -151,7 +151,12 @@ def verify_cmd(
             SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console, transient=True
         ) as progress:
             progress.add_task("Initializing verifier...", total=None)
-            verifier = AgentCardVerifier(staging=staging, trust_config=trust_config)
+            verifier = AgentCardVerifier(
+                identity=identity,
+                oidc_issuer=identity_provider,
+                staging=staging,
+                trust_config=trust_config,
+            )
 
             progress.add_task("Verifying signature...", total=None)
             result = verifier.verify_signed_card(signed_card, constraints)
