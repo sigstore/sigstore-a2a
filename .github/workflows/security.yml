@@ -32,10 +32,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
 
       - name: Dependency Review
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@56339e523c0409420f6c2c9a2f4292bbb3c07dd3 # v4
         with:
           fail-on-severity: moderate
 
@@ -45,10 +45,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6
         with:
           python-version: '3.11'
 
@@ -82,7 +82,7 @@ jobs:
           uv run bandit -r sigstore-a2a -f json -o bandit-report.json || true
 
       - name: Upload security scan results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: security-reports
           path: |
