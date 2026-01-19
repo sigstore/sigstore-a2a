@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5
 
       - name: Set up Python
         uses: actions/setup-python@4f41a90a1f38628c7ccc608d05fbafe701bc20ae # v6
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5
 
       - name: Verify license headers
         run: |
