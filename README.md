@@ -16,7 +16,7 @@ This library enables verifiable supply chain security for A2A agents by providin
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.11+ (3.11, 3.12, 3.13 supported; 3.14 pending dependency updates)
 - UV package manager (recommended) or pip
 
 ## Installation
@@ -129,17 +129,17 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: '3.13'
 
-      - name: Install UV package manager
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - name: Install UV
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
 
       - name: Install sigstore-a2a
         run: |
