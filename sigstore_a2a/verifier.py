@@ -94,8 +94,8 @@ class AgentCardVerifier:
 
         Args:
             identity: The expected identity that has signed the model
-            oidc_issuer: The expected OpenID Connect issuer that provided the
-              certificate used for the signature
+            oidc_issuer: The expected OpenID Connect issuer that provided
+                the certificate used for the signature
             staging: Use Sigstore staging environment
             trust_config: A path to a custom trust configuration
         """
