@@ -104,7 +104,7 @@ jobs:
 
       - name: Verify signed Agent Card
         run: |
-          uv run sigstore-a2a verify --verbose \
+          uv run sigstore-a2a --verbose verify \
             --identity_provider "https://token.actions.githubusercontent.com" \
             --repository "sigstore-conformance/extremely-dangerous-public-oidc-beacon" \
             --workflow "Extremely dangerous OIDC beacon" \
