@@ -19,89 +19,104 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  contents: write
-  id-token: write  # Required for Sigstore OIDC
-
 jobs:
-  release:
-    name: Create Release
+  build_wheel:
+    name: Build the wheel
+    if: github.repository == 'sigstore/sigstore-a2a'
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: read
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@4f41a90a1f38628c7ccc608d05fbafe701bc20ae # v6
+          persist-credentials: false
+      - name: Set up Hatch
+        uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # install
+      - name: Build artifacts
+        run: hatch build
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          python-version: '3.11'
+          path: dist/
+          name: dist.zip
+          if-no-files-found: error
+          retention-days: 1
 
-      - name: Install UV
-        uses: astral-sh/setup-uv@v7
+  publish_release_to_pypi:
+    name: Publish release to PyPI
+    needs: [build_wheel]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/sigstore-a2a
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          version: "latest"
+          name: dist.zip
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
 
-      - name: Cache UV dependencies
-        uses: actions/cache@v5
+  create_github_release:
+    name: Create GitHub Release
+    needs: [build_wheel]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          path: |
-            ~/.cache/uv
-            %LOCALAPPDATA%\uv\cache
-          key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-
-
-      - name: Install dependencies
-        run: |
-          uv sync --prerelease=allow
-
-      - name: Build package
-        run: |
-          uv build
-
-      - name: Sign release Agent Card
-        env:
-          UV_PRERELEASE: allow
-        run: |
-          uv run sigstore-a2a sign example_agentcard.json \
-            --output release-signed-agent-card.json \
-            --repository ${{ github.repository }}
-
-      - name: Verify release Agent Card
-        env:
-          UV_PRERELEASE: allow
-        run: |
-          uv run sigstore-a2a verify release-signed-agent-card.json \
-            --repository ${{ github.repository }} \
-            --workflow "${{ github.workflow }}"
-
-      - name: Generate changelog
-        id: changelog
-        run: |
-          echo "## Release Notes" > CHANGELOG.md
-          echo "" >> CHANGELOG.md
-          echo "This release includes a cryptographically signed Agent Card demonstrating the sigstore-a2a signing process." >> CHANGELOG.md
-          echo "" >> CHANGELOG.md
-          echo "### Verification" >> CHANGELOG.md
-          echo "To verify the signed Agent Card:" >> CHANGELOG.md
-          echo "\`\`\`bash" >> CHANGELOG.md
-          echo "sigstore-a2a verify release-signed-agent-card.json --repository ${{ github.repository }}" >> CHANGELOG.md
-          echo "\`\`\`" >> CHANGELOG.md
-          echo "" >> CHANGELOG.md
-          echo "### Files" >> CHANGELOG.md
-          echo "- \`release-signed-agent-card.json\` - Cryptographically signed Agent Card" >> CHANGELOG.md
-          echo "- Distribution packages in the Assets section below" >> CHANGELOG.md
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@6cbd405e2c4e67a21c47fa9e383d020e4e28b836 # v2
+          name: dist.zip
+          path: dist/
+      - uses: softprops/action-gh-release@6cbd405e2c4e67a21c47fa9e383d020e4e28b836 # v2
         with:
           draft: false
           prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
-          body_path: CHANGELOG.md
           files: |
             dist/*
-            release-signed-agent-card.json
           generate_release_notes: true
+
+  build_and_push_container:
+    name: Build and Push Docker Image
+    needs: [publish_release_to_pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build image
+        id: build_image
+        uses: redhat-actions/buildah-build@7a95fa7ee0f02d552a32753e7414641a04307056 # v2.13
+        with:
+          containerfiles: |
+            ./Containerfile
+          image: sigstore/sigstore-a2a
+          tags: "latest ${{ github.ref_name }}"
+          archs: amd64
+          oci: false
+      - name: Push image to GHCR
+        uses: redhat-actions/push-to-registry@5ed88d269cf581ea9ef6dd6806d01562096bee9c # v2.8
+        id: push
+        with:
+          image: ${{ steps.build_image.outputs.image }}
+          tags: ${{ steps.build_image.outputs.tags }}
+          registry: ghcr.io
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        with:
+          subject-name: ghcr.io/sigstore/sigstore-a2a
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
