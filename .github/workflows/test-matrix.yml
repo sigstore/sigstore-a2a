@@ -45,7 +45,7 @@ jobs:
           version: "latest"
 
       - name: Cache UV dependencies
-        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ~/.cache/uv
           key: ${{ runner.os }}-uv-py${{ matrix.python-version }}-${{ hashFiles('uv.lock') }}
@@ -89,7 +89,7 @@ jobs:
 
       - name: Cache UV dependencies (Unix)
         if: runner.os != 'Windows'
-        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ~/.cache/uv
           key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
@@ -98,7 +98,7 @@ jobs:
 
       - name: Cache UV dependencies (Windows)
         if: runner.os == 'Windows'
-        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ~\AppData\Local\uv\cache
           key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
@@ -135,7 +135,7 @@ jobs:
 
       - name: Cache UV dependencies (Unix)
         if: runner.os != 'Windows'
-        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ~/.cache/uv
           key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
@@ -144,7 +144,7 @@ jobs:
 
       - name: Cache UV dependencies (Windows)
         if: runner.os == 'Windows'
-        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ~\AppData\Local\uv\cache
           key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
@@ -185,7 +185,7 @@ jobs:
 
       - name: Cache UV dependencies (Unix)
         if: runner.os != 'Windows'
-        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ~/.cache/uv
           key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
@@ -194,7 +194,7 @@ jobs:
 
       - name: Cache UV dependencies (Windows)
         if: runner.os == 'Windows'
-        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ~\AppData\Local\uv\cache
           key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
