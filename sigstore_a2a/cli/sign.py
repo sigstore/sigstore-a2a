@@ -230,7 +230,7 @@ def sign_cmd(
             out_path.parent.mkdir(parents=True, exist_ok=True)
             with open(out_path, "w", encoding="utf-8", newline="\n") as f:
                 json.dump(
-                    signed_card.model_dump(by_alias=True, exclude_none=True),
+                    signed_card.to_dict(),
                     f,
                     indent=2,
                     ensure_ascii=False,
