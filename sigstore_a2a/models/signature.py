@@ -16,7 +16,7 @@ import json
 from typing import Any
 
 from a2a.types import AgentCard
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_serializer, field_validator
 from sigstore.models import Bundle
 
 from .provenance import SLSAProvenance
@@ -60,7 +60,23 @@ class SignedAgentCard(BaseModel):
     agent_card: AgentCard = Field(..., alias="agentCard", description="The A2A Agent Card")
     attestations: Attestations = Field(..., description="Cryptographic attestation of the Agent Card")
 
+    _raw_card_data: dict[str, Any] | None = PrivateAttr(default=None)
+
     model_config = {"populate_by_name": True}
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize preserving the original agent card key order.
+
+        Uses the raw card data (original JSON key order) when available,
+        falling back to Pydantic's model_dump otherwise.
+        """
+        card_data = (
+            self._raw_card_data
+            if self._raw_card_data is not None
+            else self.agent_card.model_dump(by_alias=True)
+        )
+        attestations = self.attestations.model_dump(by_alias=True, exclude_none=True)
+        return {"agentCard": card_data, "attestations": attestations}
 
     @property
     def name(self) -> str:

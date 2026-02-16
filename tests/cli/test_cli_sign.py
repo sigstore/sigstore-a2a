@@ -35,8 +35,8 @@ class _DummySigned:
     def __init__(self, card: dict):
         self._card = card
 
-    def model_dump(self, by_alias: bool = True, exclude_none: bool = True) -> dict:
-        # Minimal structure your CLI writes back out
+    def to_dict(self) -> dict:
+        # Preserves original card key order under agentCard
         return {
             "agentCard": self._card,
             "attestations": {
@@ -181,6 +181,24 @@ def test_sign_with_provenance_calls_builder(runner: CliRunner, sample_card_path:
     # The signer should have been called with a provenance bundle
     called = _RecordingSigner.last_sign_kwargs or {}
     assert called.get("provenance_bundle") is not None
+
+
+def test_sign_preserves_key_order(runner: CliRunner, sample_card_path: Path, monkeypatch, tmp_path: Path):
+    _patch_cmd_module(monkeypatch)
+
+    out_path = tmp_path / "ordered.json"
+    result = runner.invoke(
+        sign_cmd,
+        [str(sample_card_path), "--output", str(out_path)],
+        env={"SIGSTORE_NO_BROWSER": "1"},
+    )
+    assert result.exit_code == 0, result.output
+
+    original = json.loads(sample_card_path.read_text(encoding="utf-8"))
+    data = json.loads(out_path.read_text(encoding="utf-8"))
+
+    # agentCard keys should match the original key order exactly
+    assert list(data["agentCard"].keys()) == list(original.keys())
 
 
 def test_sign_missing_trust_config_errors(runner: CliRunner, sample_card_path: Path, monkeypatch, tmp_path: Path):

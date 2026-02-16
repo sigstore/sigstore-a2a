@@ -163,6 +163,7 @@ class AgentCardSigner:
         attestations = Attestations(signature_bundle=bundle.to_json(), provenance_bundle=provenance_bundle)
 
         signed_card = SignedAgentCard(agent_card=parsed_card, attestations=attestations)
+        signed_card._raw_card_data = card_data
 
         return signed_card
 
@@ -192,6 +193,6 @@ class AgentCardSigner:
         signed_card = self.sign_agent_card(input_path, provenance_bundle)
 
         with open(output_path, "w") as f:
-            json.dump(signed_card.model_dump(by_alias=True), f, indent=2, default=str)
+            json.dump(signed_card.to_dict(), f, indent=2, default=str)
 
         return output_path
