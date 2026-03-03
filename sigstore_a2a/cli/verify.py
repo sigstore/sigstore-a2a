@@ -20,6 +20,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
 from ..verifier import AgentCardVerifier, IdentityConstraints
+from .main import _validate_trust_options
 
 console = Console()
 
@@ -35,10 +36,16 @@ console = Console()
     help="Use Sigstore staging trust roots.",
 )
 @click.option(
+    "--instance",
+    type=str,
+    metavar="URL",
+    help="Sigstore instance URL (uses TUF-bootstrapped trust).",
+)
+@click.option(
     "--trust_config",
     type=click.Path(path_type=Path),
     metavar="CLIENT_TRUST_JSON",
-    help="Path to Sigstore ClientTrustConfig JSON.",
+    help="Path to ClientTrustConfig JSON (manual trust configuration).",
 )
 @click.option(
     "--repository",
@@ -71,6 +78,7 @@ def verify_cmd(
     staging: bool,
     identity_provider: str,
     identity: str | None = None,
+    instance: str | None = None,
     trust_config: Path | None = None,
     repository: str | None = None,
     workflow: str | None = None,
@@ -129,6 +137,8 @@ def verify_cmd(
     """
     verbose = ctx.obj.get("verbose", False)
 
+    _validate_trust_options(staging, instance, trust_config)
+
     constraints = None
     if any([repository, workflow, identity, identity_provider]):
         constraints = IdentityConstraints(
@@ -155,6 +165,7 @@ def verify_cmd(
                 identity=identity,
                 oidc_issuer=identity_provider,
                 staging=staging,
+                instance=instance,
                 trust_config=trust_config,
             )
 

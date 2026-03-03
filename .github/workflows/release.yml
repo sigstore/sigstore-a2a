@@ -62,19 +62,35 @@ jobs:
         run: |
           uv build
 
-      - name: Sign release Agent Card
+      - name: Sign GeoRoute Agent Card
         env:
           UV_PRERELEASE: allow
         run: |
-          uv run sigstore-a2a sign example_agentcard.json \
-            --output release-signed-agent-card.json \
+          uv run sigstore-a2a sign examples/georoute-agent.json \
+            --output signed-georoute-agent.json \
             --repository ${{ github.repository }}
 
-      - name: Verify release Agent Card
+      - name: Sign Data Analysis Agent Card
         env:
           UV_PRERELEASE: allow
         run: |
-          uv run sigstore-a2a verify release-signed-agent-card.json \
+          uv run sigstore-a2a sign examples/data-analysis-agent.json \
+            --output signed-data-analysis-agent.json \
+            --repository ${{ github.repository }}
+
+      - name: Verify GeoRoute Agent Card
+        env:
+          UV_PRERELEASE: allow
+        run: |
+          uv run sigstore-a2a verify signed-georoute-agent.json \
+            --repository ${{ github.repository }} \
+            --workflow "${{ github.workflow }}"
+
+      - name: Verify Data Analysis Agent Card
+        env:
+          UV_PRERELEASE: allow
+        run: |
+          uv run sigstore-a2a verify signed-data-analysis-agent.json \
             --repository ${{ github.repository }} \
             --workflow "${{ github.workflow }}"
 
@@ -83,16 +99,18 @@ jobs:
         run: |
           echo "## Release Notes" > CHANGELOG.md
           echo "" >> CHANGELOG.md
-          echo "This release includes a cryptographically signed Agent Card demonstrating the sigstore-a2a signing process." >> CHANGELOG.md
+          echo "This release includes cryptographically signed example Agent Cards demonstrating the sigstore-a2a signing process." >> CHANGELOG.md
           echo "" >> CHANGELOG.md
           echo "### Verification" >> CHANGELOG.md
-          echo "To verify the signed Agent Card:" >> CHANGELOG.md
+          echo "To verify the signed Agent Cards:" >> CHANGELOG.md
           echo "\`\`\`bash" >> CHANGELOG.md
-          echo "sigstore-a2a verify release-signed-agent-card.json --repository ${{ github.repository }}" >> CHANGELOG.md
+          echo "sigstore-a2a verify signed-georoute-agent.json --repository ${{ github.repository }}" >> CHANGELOG.md
+          echo "sigstore-a2a verify signed-data-analysis-agent.json --repository ${{ github.repository }}" >> CHANGELOG.md
           echo "\`\`\`" >> CHANGELOG.md
           echo "" >> CHANGELOG.md
           echo "### Files" >> CHANGELOG.md
-          echo "- \`release-signed-agent-card.json\` - Cryptographically signed Agent Card" >> CHANGELOG.md
+          echo "- \`signed-georoute-agent.json\` - Signed GeoRoute Agent Card" >> CHANGELOG.md
+          echo "- \`signed-data-analysis-agent.json\` - Signed Data Analysis Agent Card" >> CHANGELOG.md
           echo "- Distribution packages in the Assets section below" >> CHANGELOG.md
 
       - name: Create GitHub Release
@@ -103,5 +121,6 @@ jobs:
           body_path: CHANGELOG.md
           files: |
             dist/*
-            release-signed-agent-card.json
+            signed-georoute-agent.json
+            signed-data-analysis-agent.json
           generate_release_notes: true
