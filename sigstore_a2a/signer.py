@@ -35,6 +35,7 @@ class AgentCardSigner:
         identity_token: str | None = None,
         trust_config: Path | None = None,
         staging: bool = False,
+        instance: str | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
         use_ambient_credentials: bool = False,
@@ -44,11 +45,18 @@ class AgentCardSigner:
 
         Args:
             identity_token: Pre-obtained identity token
+            trust_config: Path to ClientTrustConfig JSON for manual trust configuration
             staging: Use Sigstore staging environment
+            instance: Sigstore instance URL (for TUF-bootstrapped trust)
+            client_id: Custom OIDC client ID
+            client_secret: Custom OIDC client secret
+            use_ambient_credentials: Use ambient CI/OIDC credentials
+            verbose: Enable verbose output
         """
         self.identity_token = identity_token
         self.staging = staging
         self.trust_config = trust_config
+        self.instance = instance
         self.client_id = client_id
         self.client_secret = client_secret
         self.use_ambient_credentials = use_ambient_credentials
@@ -61,17 +69,25 @@ class AgentCardSigner:
         """
         Retrieves or creates a Sigstore signer instance based on the configuration.
 
-        The method prioritizes the staging environment if enabled, falls back to a
-        custom trust configuration, and defaults to the production environment
-        for signing operations. This ensures the correct root of trust is used.
+        Trust options are mutually exclusive:
+          --trust_config: Use manual ClientTrustConfig JSON
+          --instance URL: Use TUF-bootstrapped trust (requires prior trust-instance)
+          --staging: Use Sigstore staging environment
+          (default): Use Sigstore production environment
         """
         if self._signer is not None and self._issuer is not None:
             return self._signer, self._issuer
 
-        if self.staging:
-            trust_config = ClientTrustConfig.staging()
-        elif self.trust_config:
+        trust_opts = sum(bool(x) for x in [self.staging, self.instance, self.trust_config])
+        if trust_opts > 1:
+            raise ValueError("Only one of --staging, --instance, or --trust_config may be specified")
+
+        if self.trust_config:
             trust_config = ClientTrustConfig.from_json(self.trust_config.read_text())
+        elif self.instance:
+            trust_config = ClientTrustConfig.from_tuf(self.instance)
+        elif self.staging:
+            trust_config = ClientTrustConfig.staging()
         else:
             trust_config = ClientTrustConfig.production()
 

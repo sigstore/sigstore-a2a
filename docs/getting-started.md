@@ -185,15 +185,47 @@ verifier = AgentCardVerifier(staging=True)
 
 ## Custom Trust Configuration
 
-For private Sigstore deployments (e.g., [RHTAS](https://www.redhat.com/en/technologies/cloud-computing/red-hat-trusted-artifact-signer)), you can provide a custom trust configuration:
+For private Sigstore deployments, there are two approaches.
+
+!!! note "Mutually Exclusive Options"
+    `--staging`, `--instance`, and `--trust_config` are mutually exclusive. Use only one.
+
+### TUF-Bootstrapped Trust (Recommended)
+
+If your Sigstore instance provides TUF metadata, use `trust-instance` to bootstrap trust:
 
 ```bash
-sigstore-a2a sign agent-card.json --trust_config /path/to/trust-config.json
+# Bootstrap trust once
+sigstore-a2a trust-instance root.json --instance https://sigstore.example.com
+
+# Then sign/verify using --instance
+sigstore-a2a sign agent-card.json --instance https://sigstore.example.com
+sigstore-a2a verify signed-card.json \
+  --instance https://sigstore.example.com \
+  --identity_provider https://oauth.example.com
+```
+
+```python
+from sigstore_a2a import AgentCardSigner, AgentCardVerifier
+
+signer = AgentCardSigner(instance="https://sigstore.example.com")
+verifier = AgentCardVerifier(instance="https://sigstore.example.com")
+```
+
+### Manual ClientTrustConfig JSON
+
+For instances without TUF, use a ClientTrustConfig JSON file directly:
+
+```bash
+sigstore-a2a sign agent-card.json --trust_config ./client-trust-config.json
 ```
 
 ```python
 from pathlib import Path
+from sigstore_a2a import AgentCardSigner
 
-signer = AgentCardSigner(trust_config=Path("/path/to/trust-config.json"))
+signer = AgentCardSigner(trust_config=Path("./client-trust-config.json"))
 ```
+
+The ClientTrustConfig JSON should follow the [Sigstore trust configuration format](https://github.com/sigstore/protobuf-specs/blob/main/protos/sigstore_trustroot.proto).
 

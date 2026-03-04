@@ -96,6 +96,7 @@ class AgentCardVerifier:
         oidc_issuer: str | None = None,
         staging: bool = False,
         trust_config: Path | None = None,
+        instance: str | None = None,
     ):
         """Initialize the Agent Card verifier.
 
@@ -104,12 +105,14 @@ class AgentCardVerifier:
             oidc_issuer: The expected OpenID Connect issuer that provided
                 the certificate used for the signature
             staging: Use Sigstore staging environment
-            trust_config: A path to a custom trust configuration
+            trust_config: Path to ClientTrustConfig JSON for manual trust configuration
+            instance: Sigstore instance URL (for TUF-bootstrapped trust)
         """
         self.identity = identity
         self.oidc_issuer = oidc_issuer
         self.staging = staging
         self.trust_config = trust_config
+        self.instance = instance
 
         self._verifier: Verifier | None = None
 
@@ -117,20 +120,27 @@ class AgentCardVerifier:
         """
         Retrieves or creates a Sigstore verifier instance based on the configuration.
 
-        The method prioritizes the staging environment if enabled, falls back to a
-        custom trust configuration, and defaults to the production environment.
-        This ensures the correct root of trust is used for verification.
+        Trust options are mutually exclusive:
+          --trust_config: Use manual ClientTrustConfig JSON
+          --instance URL: Use TUF-bootstrapped trust (requires prior trust-instance)
+          --staging: Use Sigstore staging environment
+          (default): Use Sigstore production environment
         """
         if self._verifier is not None:
             return self._verifier
 
-        if self.staging:
-            self._verifier = Verifier.staging()
-        elif self.trust_config:
-            trust_config = ClientTrustConfig.from_json(
-                self.trust_config.read_text()
-            )
+        trust_opts = sum(bool(x) for x in [self.staging, self.instance, self.trust_config])
+        if trust_opts > 1:
+            raise ValueError("Only one of --staging, --instance, or --trust_config may be specified")
+
+        if self.trust_config:
+            trust_config = ClientTrustConfig.from_json(self.trust_config.read_text())
             self._verifier = Verifier(trusted_root=trust_config.trusted_root)
+        elif self.instance:
+            trust_config = ClientTrustConfig.from_tuf(self.instance)
+            self._verifier = Verifier(trusted_root=trust_config.trusted_root)
+        elif self.staging:
+            self._verifier = Verifier.staging()
         else:
             self._verifier = Verifier.production()
 

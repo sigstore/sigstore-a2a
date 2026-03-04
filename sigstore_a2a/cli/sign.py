@@ -24,6 +24,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from ..provenance import ProvenanceBuilder
 from ..signer import AgentCardSigner
 from ..utils.ci import detect_ci_environment
+from .main import _validate_trust_options
 
 console = Console()
 
@@ -52,10 +53,16 @@ console = Console()
     help="Use Sigstore staging trust roots.",
 )
 @click.option(
+    "--instance",
+    type=str,
+    metavar="URL",
+    help="Sigstore instance URL (uses TUF-bootstrapped trust).",
+)
+@click.option(
     "--trust_config",
     type=click.Path(path_type=Path),
     metavar="CLIENT_TRUST_JSON",
-    help="Path to Sigstore ClientTrustConfig JSON.",
+    help="Path to ClientTrustConfig JSON (manual trust configuration).",
 )
 @click.option(
     "--provenance",
@@ -105,6 +112,7 @@ def sign_cmd(
     output: Path | None,
     use_ambient_credentials: bool,
     staging: bool,
+    instance: str | None = None,
     trust_config: Path | None = None,
     provenance: bool = False,
     identity_token: str | None = None,
@@ -151,7 +159,7 @@ def sign_cmd(
       # Use Sigstore staging (good for sandbox testing)
       sigstore-a2a sign agent-card.json --staging
 
-      # Use a private trust root (RHTAS); trust_config is your client trust JSON
+      # Use a private Sigstore instance; trust_config is your client trust JSON
       sigstore-a2a sign agent-card.json --trust_config ./signing_config.json
 
       # Use a pre-fetched OIDC token (e.g., exported to $IDENTITY_TOKEN)
@@ -174,6 +182,8 @@ def sign_cmd(
     """
     verbose = bool(ctx.obj.get("verbose")) if isinstance(ctx.obj, dict) else False
 
+    _validate_trust_options(staging, instance, trust_config)
+
     if use_ambient_credentials and verbose:
         ci_env = detect_ci_environment()
         console.print(
@@ -195,6 +205,7 @@ def sign_cmd(
             progress.add_task("Initializing signer...", total=None)
             signer = AgentCardSigner(
                 staging=staging,
+                instance=instance,
                 trust_config=trust_config,
                 identity_token=identity_token,
                 client_id=client_id,

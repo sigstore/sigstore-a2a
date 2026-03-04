@@ -24,18 +24,33 @@ import sigstore_a2a
 console = Console()
 
 
-# Common trust / instance toggles
+# Common trust / instance toggles (mutually exclusive)
 _sigstore_staging = click.option(
     "--staging",
     type=bool,
     is_flag=True,
-    help="Use Sigstore staging environment.",
+    help="Use Sigstore staging environment. Mutually exclusive with --instance and --trust_config.",
+)
+_instance = click.option(
+    "--instance",
+    type=str,
+    metavar="URL",
+    help="Sigstore instance URL (TUF-bootstrapped). Mutually exclusive with --staging and --trust_config.",
 )
 _trust_config = click.option(
     "--trust_config",
     type=click.Path(path_type=Path),
-    help="Client trust configuration to use.",
+    help="Path to ClientTrustConfig JSON. Mutually exclusive with --staging and --instance.",
 )
+
+
+def _validate_trust_options(staging: bool, instance: str | None, trust_config: Path | None) -> None:
+    """Validate that trust options are mutually exclusive."""
+    opts = sum(bool(x) for x in [staging, instance, trust_config])
+    if opts > 1:
+        raise click.ClickException(
+            "Options --staging, --instance, and --trust_config are mutually exclusive"
+        )
 
 # Signing inputs / outputs
 _agent_card_arg = click.argument("agent_card", type=click.Path(exists=True, path_type=Path))
@@ -128,6 +143,7 @@ def cli(ctx: click.Context, verbose: bool) -> None:
 @_agent_card_arg
 @_output
 @_sigstore_staging
+@_instance
 @_trust_config
 @_provenance
 @_identity_token
@@ -153,6 +169,7 @@ def sign_cmd_direct(ctx: click.Context, **kwargs):
 @_identity
 @_identity_provider
 @_sigstore_staging
+@_instance
 @_trust_config
 @_repository
 @_workflow
@@ -190,6 +207,47 @@ def serve_cmd_direct(ctx: click.Context, **kwargs):
     except ImportError as e:
         console.print(f"[red]Error:[/red] Failed to import serving dependencies: {e}")
         raise click.ClickException("Serving functionality unavailable") from e
+
+
+# trust-instance
+@cli.command("trust-instance")
+@click.argument("root_file", type=click.Path(exists=True, path_type=Path))
+@_instance
+@click.pass_context
+def trust_instance_cmd(ctx: click.Context, root_file: Path, instance: str | None):
+    """
+    Bootstrap trust for a Sigstore instance using TUF.
+
+    This command initializes trust for a private Sigstore instance by downloading
+    and caching trust metadata via TUF (The Update Framework). Once bootstrapped,
+    use --instance URL with sign/verify commands.
+
+    ROOT_FILE is the path to the TUF root metadata file for the instance.
+
+    Examples:
+
+      # Bootstrap trust for a private instance
+      sigstore-a2a trust-instance root.json --instance https://sigstore.example.com
+
+      # Then sign using the bootstrapped trust
+      sigstore-a2a sign agent-card.json --instance https://sigstore.example.com
+    """
+    from sigstore.models import ClientTrustConfig
+
+    verbose = ctx.obj.get("verbose", False)
+
+    if not instance:
+        raise click.ClickException("--instance URL is required for trust-instance")
+
+    try:
+        console.print(f"[blue]Bootstrapping trust for: {instance}[/blue]")
+        ClientTrustConfig.from_tuf(instance, bootstrap_root=root_file)
+        console.print(f"[green]✓[/green] Trust bootstrapped for {instance}")
+        if verbose:
+            console.print(f"[dim]TUF root: {root_file}[/dim]")
+    except Exception as e:
+        console.print(f"[red]✗[/red] Failed to bootstrap trust: {e}")
+        raise click.ClickException(str(e)) from e
 
 
 # Entrypoint
