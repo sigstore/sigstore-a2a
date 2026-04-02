@@ -168,7 +168,10 @@ class AgentCardSigner:
                 identity = IdentityToken(ambient_credential)
 
             else:
-                identity = issuer.identity_token()
+                identity = issuer.identity_token(
+                    client_id=self.client_id or "sigstore",
+                    client_secret=self.client_secret or "",
+                )
 
             with signing_context.signer(identity, cache=True) as signer:
                 bundle = signer.sign_dsse(statement)
