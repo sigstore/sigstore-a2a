@@ -1,0 +1,78 @@
+{
+  "name": "My Agent",
+  "description": "A production agent with full A2A capabilities, signature verification, and identity binding",
+  "version": "2.1.0",
+  "url": "http://my-agent.my-agents.svc.cluster.local:8080",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false
+  },
+  "supportsAuthenticatedExtendedCard": true,
+  "defaultInputModes": ["text/plain", "application/json"],
+  "defaultOutputModes": ["text/plain", "application/json"],
+  "skills": [
+    {
+      "id": "analyze-data",
+      "name": "Analyze Data",
+      "description": "Performs statistical analysis on structured datasets",
+      "tags": ["analytics", "data-science", "statistics"],
+      "examples": [
+        "Analyze the sales data for Q4",
+        "Run a regression on the customer churn dataset",
+        "Show me the correlation between price and demand"
+      ],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json", "text/plain"],
+      "parameters": [
+        {
+          "name": "dataset",
+          "type": "object",
+          "description": "The structured dataset to analyze",
+          "required": true
+        },
+        {
+          "name": "analysisType",
+          "type": "string",
+          "description": "Type of analysis: regression, correlation, summary, anomaly",
+          "required": true,
+          "default": "summary"
+        },
+        {
+          "name": "confidence",
+          "type": "number",
+          "description": "Confidence level for statistical tests (0.0 to 1.0)",
+          "required": false,
+          "default": "0.95"
+        }
+      ]
+    },
+    {
+      "id": "generate-report",
+      "name": "Generate Report",
+      "description": "Creates formatted reports from analysis results",
+      "tags": ["reporting", "documents"],
+      "examples": [
+        "Generate a report of last month's metrics",
+        "Summarize the Q3 performance data"
+      ],
+      "inputModes": ["application/json"],
+      "outputModes": ["text/plain", "application/json"],
+      "parameters": [
+        {
+          "name": "format",
+          "type": "string",
+          "description": "Output format: markdown, json, csv",
+          "required": false,
+          "default": "markdown"
+        },
+        {
+          "name": "includeCharts",
+          "type": "boolean",
+          "description": "Whether to include chart descriptions in the report",
+          "required": false,
+          "default": "false"
+        }
+      ]
+    }
+  ]
+}

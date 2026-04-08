@@ -44,7 +44,7 @@ jobs:
           version: "latest"
 
       - name: Cache UV dependencies
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: ~/.cache/uv
           key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
@@ -80,7 +80,7 @@ jobs:
           version: "latest"
 
       - name: Cache UV dependencies
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: ~/.cache/uv
           key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
@@ -93,26 +93,45 @@ jobs:
       - name: Get OIDC token
         uses: sigstore-conformance/extremely-dangerous-public-oidc-beacon@main
 
-      - name: Sign example Agent Card
+      - name: Sign GeoRoute Agent Card
         run: |
           uv run sigstore-a2a sign \
-            --output signed-example.json \
+            --output signed-georoute-agent.json \
             --repository ${{ github.repository }} \
             --provenance \
             --identity_token "$(cat oidc-token.txt)" \
-            example_agentcard.json
+            examples/georoute-agent.json
 
-      - name: Verify signed Agent Card
+      - name: Sign Data Analysis Agent Card
+        run: |
+          uv run sigstore-a2a sign \
+            --output signed-data-analysis-agent.json \
+            --repository ${{ github.repository }} \
+            --provenance \
+            --identity_token "$(cat oidc-token.txt)" \
+            examples/data-analysis-agent.json
+
+      - name: Verify GeoRoute Agent Card
         run: |
           uv run sigstore-a2a --verbose verify \
             --identity_provider "https://token.actions.githubusercontent.com" \
             --repository "sigstore-conformance/extremely-dangerous-public-oidc-beacon" \
             --workflow "Extremely dangerous OIDC beacon" \
-            signed-example.json
+            signed-georoute-agent.json
 
-      - name: Upload signed Agent Card
+      - name: Verify Data Analysis Agent Card
+        run: |
+          uv run sigstore-a2a --verbose verify \
+            --identity_provider "https://token.actions.githubusercontent.com" \
+            --repository "sigstore-conformance/extremely-dangerous-public-oidc-beacon" \
+            --workflow "Extremely dangerous OIDC beacon" \
+            signed-data-analysis-agent.json
+
+      - name: Upload signed Agent Cards
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: signed-agent-card
-          path: signed-example.json
+          name: signed-agent-cards
+          path: |
+            signed-georoute-agent.json
+            signed-data-analysis-agent.json
           retention-days: 30

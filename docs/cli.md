@@ -36,8 +36,9 @@ sigstore-a2a sign AGENT_CARD_JSON [OPTIONS]
 |--------|-------------|
 | `-o, --output PATH` | Output path for the signed Agent Card |
 | `--use_ambient_credentials` | Use ambient CI/OIDC credentials if available |
-| `--staging` | Use Sigstore staging trust roots |
-| `--trust_config PATH` | Path to Sigstore ClientTrustConfig JSON |
+| `--staging` | Use Sigstore staging trust roots (mutually exclusive with `--instance`, `--trust_config`) |
+| `--instance URL` | Sigstore instance URL (mutually exclusive with `--staging`, `--trust_config`) |
+| `--trust_config PATH` | Path to ClientTrustConfig JSON (mutually exclusive with `--staging`, `--instance`) |
 | `--provenance` | Generate and embed SLSA provenance |
 | `--identity_token TOKEN` | Fixed OIDC identity token to use |
 | `--client_id ID` | OpenID Connect client ID for OAuth2 |
@@ -52,26 +53,20 @@ sigstore-a2a sign AGENT_CARD_JSON [OPTIONS]
 # Basic signing (will open browser for authentication)
 sigstore-a2a sign agent-card.json
 
-# Sign with specific output path
-sigstore-a2a sign agent-card.json --output signed-card.json
-
 # Sign using CI credentials (GitHub Actions, GitLab CI, etc.)
 sigstore-a2a sign agent-card.json --use_ambient_credentials
-
-# Sign with SLSA provenance
-sigstore-a2a sign agent-card.json \
-  --provenance \
-  --repository myorg/myrepo \
-  --commit_sha $GITHUB_SHA
-
-# Sign using a pre-obtained identity token
-sigstore-a2a sign agent-card.json --identity_token "$OIDC_TOKEN"
 
 # Sign using staging environment
 sigstore-a2a sign agent-card.json --staging
 
-# Sign using custom trust configuration (private Sigstore)
-sigstore-a2a sign agent-card.json --trust_config ./signing-config.json
+# Sign using TUF-bootstrapped instance (after running trust-instance)
+sigstore-a2a sign agent-card.json --instance https://sigstore.example.com
+
+# Sign using manual ClientTrustConfig JSON
+sigstore-a2a sign agent-card.json --trust_config ./client-trust-config.json
+
+# Sign with SLSA provenance
+sigstore-a2a sign agent-card.json --provenance --repository myorg/myrepo
 ```
 
 ---
@@ -94,12 +89,13 @@ sigstore-a2a verify SIGNED_CARD_JSON [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `--staging` | Use Sigstore staging environment |
+| `--staging` | Use Sigstore staging environment (mutually exclusive with `--instance`, `--trust_config`) |
+| `--instance URL` | Sigstore instance URL (mutually exclusive with `--staging`, `--trust_config`) |
+| `--trust_config PATH` | Path to ClientTrustConfig JSON (mutually exclusive with `--staging`, `--instance`) |
 | `--identity IDENTITY` | Expected identity of the signer |
 | `--identity_provider URL` | **Required.** Expected OIDC issuer URL |
 | `--repository OWNER/REPO` | Required repository constraint |
 | `--workflow NAME` | Required workflow name constraint |
-| `--trust_config PATH` | Path to custom trust configuration |
 
 #### Examples
 
@@ -113,16 +109,50 @@ sigstore-a2a verify signed-card.json \
   --identity_provider https://token.actions.githubusercontent.com \
   --repository sigstore/sigstore-a2a
 
-# Verify with workflow constraint
+# Verify using TUF-bootstrapped instance
 sigstore-a2a verify signed-card.json \
-  --identity_provider https://token.actions.githubusercontent.com \
-  --repository sigstore/sigstore-a2a \
-  --workflow "Release"
-
-# Verify with Google identity
-sigstore-a2a verify signed-card.json \
-  --identity_provider https://accounts.google.com \
+  --instance https://sigstore.example.com \
+  --identity_provider https://oauth.example.com \
   --identity user@example.com
+```
+
+---
+
+### trust-instance
+
+Bootstrap trust for a Sigstore instance using TUF (The Update Framework).
+
+This command initializes trust for a private Sigstore instance by downloading and caching trust metadata via TUF. Once bootstrapped, use `--instance URL` with sign/verify commands.
+
+```bash
+sigstore-a2a trust-instance ROOT_FILE --instance URL
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `ROOT_FILE` | Path to the TUF root metadata file for the instance |
+
+#### Options
+
+| Option | Description |
+|--------|-------------|
+| `--instance URL` | **Required.** The Sigstore instance URL |
+
+#### Examples
+
+```bash
+# Bootstrap trust for a private Sigstore instance
+sigstore-a2a trust-instance root.json --instance https://sigstore.example.com
+
+# Then sign using the bootstrapped trust
+sigstore-a2a sign agent-card.json --instance https://sigstore.example.com
+
+# Or verify
+sigstore-a2a verify signed-card.json \
+  --instance https://sigstore.example.com \
+  --identity_provider https://oauth.example.com
 ```
 
 ---
