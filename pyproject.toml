@@ -19,6 +19,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  # Python 3.14 classifier removed until pydantic-core/PyO3 supports it
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
   "Topic :: Security",
@@ -70,11 +71,10 @@ packages = ["sigstore_a2a"]
 
 [dependency-groups]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "black>=23.0.0",
-    "ruff>=0.12.5",
-    "mypy>=1.0.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+    "mypy>=1.11.0",
     "types-requests",
 ]
 docs = [
@@ -84,7 +84,7 @@ docs = [
 ]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 120
 exclude = [
     ".git",
