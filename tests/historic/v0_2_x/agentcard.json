@@ -1,0 +1,46 @@
+{
+  "protocolVersion": "0.2.9",
+  "name": "GeoSpatial Route Planner Agent",
+  "description": "Provides advanced route planning, traffic analysis, and custom map generation services.",
+  "url": "https://georoute-agent.example.com/a2a/v1",
+  "preferredTransport": "JSONRPC",
+  "additionalInterfaces": [
+    {"url": "https://georoute-agent.example.com/a2a/v1", "transport": "JSONRPC"},
+    {"url": "https://georoute-agent.example.com/a2a/grpc", "transport": "GRPC"}
+  ],
+  "provider": {
+    "organization": "Example Geo Services Inc.",
+    "url": "https://www.examplegeoservices.com"
+  },
+  "iconUrl": "https://georoute-agent.example.com/icon.png",
+  "version": "1.2.0",
+  "documentationUrl": "https://docs.examplegeoservices.com/georoute-agent/api",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": true,
+    "stateTransitionHistory": false
+  },
+  "securitySchemes": {
+    "google": {
+      "type": "openIdConnect",
+      "openIdConnectUrl": "https://accounts.google.com/.well-known/openid-configuration"
+    }
+  },
+  "security": [{"google": ["openid", "profile", "email"]}],
+  "defaultInputModes": ["application/json", "text/plain"],
+  "defaultOutputModes": ["application/json", "image/png"],
+  "skills": [
+    {
+      "id": "route-optimizer-traffic",
+      "name": "Traffic-Aware Route Optimizer",
+      "description": "Calculates optimal driving routes with real-time traffic.",
+      "tags": ["maps", "routing", "navigation", "traffic"],
+      "examples": [
+        "Plan a route from Mountain View to SFO avoiding tolls."
+      ],
+      "inputModes": ["application/json", "text/plain"],
+      "outputModes": ["application/json"]
+    }
+  ],
+  "supportsAuthenticatedExtendedCard": true
+}

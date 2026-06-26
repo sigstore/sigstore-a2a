@@ -1,0 +1,21 @@
+{
+  "name": "GeoSpatial Route Planner Agent",
+  "description": "Provides advanced route planning, traffic analysis, and custom map generation services.",
+  "supportedInterfaces": [
+    {"url": "https://georoute-agent.example.com/a2a/v1"},
+    {"url": "https://georoute-agent.example.com/a2a/grpc"}
+  ],
+  "provider": {
+    "organization": "Example Geo Services Inc.",
+    "url": "https://www.examplegeoservices.com"
+  },
+  "version": "2.0.0",
+  "skills": [
+    {
+      "id": "route-optimizer-traffic",
+      "name": "Traffic-Aware Route Optimizer",
+      "description": "Calculates optimal driving routes with real-time traffic.",
+      "tags": ["maps", "routing", "navigation", "traffic"]
+    }
+  ]
+}
