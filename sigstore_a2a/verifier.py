@@ -67,6 +67,7 @@ class VerificationResult:
         certificate: x509.Certificate | None = None,
         identity: dict[str, Any] | None = None,
         errors: list[str] | None = None,
+        raw_card_data: dict[str, Any] | None = None,
     ):
         """Initialize verification result.
 
@@ -76,12 +77,15 @@ class VerificationResult:
             certificate: Signing certificate
             identity: Extracted identity information
             errors: List of verification errors
+            raw_card_data: Raw predicate dict from the DSSE payload, preserving
+                fields that may not map to the current protobuf schema
         """
         self.valid = valid
         self.agent_card = agent_card
         self.certificate = certificate
         self.identity = identity or {}
         self.errors = errors or []
+        self.raw_card_data = raw_card_data or {}
 
     def __bool__(self) -> bool:
         """Return True if verification was successful."""
@@ -243,19 +247,23 @@ class AgentCardVerifier:
 
         return SignedAgentCard.model_validate(card_data)
 
-    def _extract_verified_card(self, payload: bytes) -> AgentCard:
+    def _extract_verified_card(self, payload: bytes) -> tuple[AgentCard, dict[str, Any]]:
         """Extract the agent card from the verified DSSE payload.
 
         After sigstore verifies the DSSE signature, the statement payload is
         the authenticated data.  We parse the agent card from the statement's
         predicate rather than trusting the outer SignedAgentCard wrapper, which
         could have been tampered with independently of the bundle.
+
+        Returns both the parsed protobuf AgentCard and the raw predicate dict,
+        since fields from older schema versions may not map to the current
+        protobuf definition but are still part of the authenticated payload.
         """
         statement = json.loads(payload)
         signed_predicate = statement.get("predicate")
         if signed_predicate is None or not isinstance(signed_predicate, dict):
             raise ValueError("DSSE statement does not contain a valid predicate")
-        return ParseDict(signed_predicate, AgentCard(), ignore_unknown_fields=True)
+        return ParseDict(signed_predicate, AgentCard(), ignore_unknown_fields=True), signed_predicate
 
     def verify_signed_card(
         self,
@@ -297,7 +305,7 @@ class AgentCardVerifier:
         #    This is the source of truth, not the outer wrapper, which could
         #    have been modified independently of the Sigstore bundle.
         try:
-            verified_card = self._extract_verified_card(payload)
+            verified_card, raw_card_data = self._extract_verified_card(payload)
         except Exception as e:
             return VerificationResult(valid=False, errors=[f"Failed to parse agent card from DSSE payload: {e}"])
 
@@ -305,7 +313,11 @@ class AgentCardVerifier:
         identity = self._extract_identity(sig_bundle.signing_certificate)
 
         return VerificationResult(
-            valid=True, agent_card=verified_card, certificate=sig_bundle.signing_certificate, identity=identity
+            valid=True,
+            agent_card=verified_card,
+            certificate=sig_bundle.signing_certificate,
+            identity=identity,
+            raw_card_data=raw_card_data,
         )
 
     def verify_file(self, file_path: str | Path, constraints: IdentityConstraints | None = None) -> VerificationResult:

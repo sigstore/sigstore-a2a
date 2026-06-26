@@ -160,23 +160,42 @@ class TestExtractVerifiedCard:
     authenticated DSSE payload (the source of truth after sigstore
     verification)."""
 
-    def test_valid_payload_returns_agent_card(self):
-        """A valid DSSE payload with a proper predicate should return an AgentCard."""
+    def test_valid_payload_returns_agent_card_and_raw_data(self):
+        """A valid DSSE payload should return both an AgentCard and raw predicate dict."""
         verifier = AgentCardVerifier()
         payload = _make_dsse_payload(CARD_DATA)
 
-        card = verifier._extract_verified_card(payload)
+        card, raw_data = verifier._extract_verified_card(payload)
         assert card.name == "Test Agent"
         assert card.version == "1.0.0"
+        assert raw_data == CARD_DATA
 
     def test_empty_predicate_returns_default_card(self):
         """Proto3 messages have default values, so an empty dict produces a valid AgentCard."""
         verifier = AgentCardVerifier()
         payload = _make_dsse_payload({})
 
-        card = verifier._extract_verified_card(payload)
+        card, raw_data = verifier._extract_verified_card(payload)
         assert card.name == ""
         assert card.version == ""
+        assert raw_data == {}
+
+    def test_old_format_card_preserves_url_in_raw_data(self):
+        """Old v0.2.x cards with url field should preserve it in raw_data for backward compat."""
+        verifier = AgentCardVerifier()
+        old_card = {
+            "name": "Legacy Agent",
+            "url": "https://example.com/agent",
+            "version": "1.0.0",
+            "protocolVersion": "0.2.9",
+            "skills": [],
+        }
+        payload = _make_dsse_payload(old_card)
+
+        card, raw_data = verifier._extract_verified_card(payload)
+        assert card.name == "Legacy Agent"
+        assert raw_data["url"] == "https://example.com/agent"
+        assert raw_data["protocolVersion"] == "0.2.9"
 
     def test_missing_predicate_raises(self):
         verifier = AgentCardVerifier()
