@@ -253,7 +253,7 @@ class TestVerifySignedCard:
         Args:
             card_data: agent card dict (defaults to CARD_DATA)
             dsse_predicate: what the signed DSSE payload predicate contains
-                            (defaults to agent_card.model_dump)
+                            (defaults to MessageToDict(agent_card))
             verify_raises: if set, verify_dsse will raise this exception
         """
         from a2a.types import AgentCard

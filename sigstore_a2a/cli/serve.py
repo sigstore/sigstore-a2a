@@ -111,7 +111,10 @@ def create_app(signed_card_path: Path, verify_on_serve: bool = True, staging: bo
                 "agent": {
                     "name": app_state["agent_card_data"].get("name"),
                     "version": app_state["agent_card_data"].get("version"),
-                    "url": app_state["agent_card_data"].get("url"),
+                    "url": next(
+                        (i["url"] for i in app_state["agent_card_data"].get("supportedInterfaces", [])),
+                        app_state["agent_card_data"].get("url"),
+                    ),
                 },
                 "endpoints": {
                     "agent_card": "/.well-known/agent.json",

@@ -191,7 +191,7 @@ def verify_cmd(
                 if url:
                     table.add_row("URL", url)
 
-                if result.agent_card.provider:
+                if result.agent_card.HasField("provider"):
                     table.add_row("Provider", result.agent_card.provider.organization)
 
                 console.print(table)
