@@ -20,6 +20,7 @@ import click
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
+from google.protobuf.json_format import MessageToDict
 from rich.console import Console
 
 from ..models.signature import SignedAgentCard
@@ -49,7 +50,7 @@ def create_app(signed_card_path: Path, verify_on_serve: bool = True, staging: bo
                 app_state["signed_card_data"] = json.load(f)
 
             signed_card = SignedAgentCard.model_validate(app_state["signed_card_data"])
-            app_state["agent_card_data"] = signed_card.agent_card.model_dump(by_alias=True, mode="json")
+            app_state["agent_card_data"] = MessageToDict(signed_card.agent_card)
 
             if verify_on_serve:
                 verifier = AgentCardVerifier(

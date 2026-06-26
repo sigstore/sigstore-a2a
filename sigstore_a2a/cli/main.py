@@ -48,9 +48,8 @@ def _validate_trust_options(staging: bool, instance: str | None, trust_config: P
     """Validate that trust options are mutually exclusive."""
     opts = sum(bool(x) for x in [staging, instance, trust_config])
     if opts > 1:
-        raise click.ClickException(
-            "Options --staging, --instance, and --trust_config are mutually exclusive"
-        )
+        raise click.ClickException("Options --staging, --instance, and --trust_config are mutually exclusive")
+
 
 # Signing inputs / outputs
 _agent_card_arg = click.argument("agent_card", type=click.Path(exists=True, path_type=Path))

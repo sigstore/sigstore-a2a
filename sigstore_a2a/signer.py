@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from a2a.types import AgentCard
+from google.protobuf.json_format import MessageToDict, ParseDict
 from sigstore.dsse import DigestSet, StatementBuilder, Subject
 from sigstore.models import ClientTrustConfig
 from sigstore.oidc import IdentityToken, Issuer, detect_credential
@@ -122,11 +123,11 @@ class AgentCardSigner:
         elif isinstance(agent_card, dict):
             card_data = agent_card
         elif isinstance(agent_card, AgentCard):
-            card_data = agent_card.model_dump(by_alias=True)
+            card_data = MessageToDict(agent_card)
         else:
             raise ValueError(f"Invalid agent card type: {type(agent_card)}")
         try:
-            parsed_card = AgentCard.model_validate(card_data)
+            parsed_card = ParseDict(card_data, AgentCard(), ignore_unknown_fields=True)
         except Exception as e:
             raise ValueError(f"Invalid agent card: {e}") from e
 

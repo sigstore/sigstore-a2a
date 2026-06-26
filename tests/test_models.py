@@ -14,61 +14,69 @@
 
 import pytest
 from a2a.types import AgentCard
-from pydantic import ValidationError
+from google.protobuf.json_format import ParseDict, ParseError
 
 from sigstore_a2a.models.provenance import DigestSet, ProvenanceSubject
 
 
 class TestAgentCard:
-    """Test Agent Card model validation."""
+    """Test Agent Card protobuf parsing."""
 
-    def test_agent_card_validation(self):
-        """Test basic Agent Card validation."""
+    def test_agent_card_parsing(self):
+        """Verify core identity fields survive ParseDict with ignore_unknown_fields."""
         card_data = {
-            "protocolVersion": "0.2.9",
             "name": "Test Agent",
             "description": "A test agent",
-            "url": "https://example.com/agent",
             "version": "1.0.0",
-            "capabilities": {"streaming": True, "pushNotifications": False},
-            "defaultInputModes": ["application/json"],
-            "defaultOutputModes": ["application/json"],
             "skills": [{"id": "test-skill", "name": "Test Skill", "description": "A test skill", "tags": ["test"]}],
         }
 
-        card = AgentCard.model_validate(card_data)
+        card = ParseDict(card_data, AgentCard(), ignore_unknown_fields=True)
         assert card.name == "Test Agent"
         assert card.version == "1.0.0"
         assert len(card.skills) == 1
 
     def test_agent_card_with_provider(self):
-        """Test Agent Card with provider information."""
+        """Verify provider nested message is parsed correctly."""
         card_data = {
-            "protocolVersion": "0.2.9",
             "name": "Test Agent",
             "description": "A test agent",
-            "url": "https://example.com/agent",
             "version": "1.0.0",
             "provider": {"organization": "Test Org", "url": "https://example.com"},
-            "capabilities": {},
+            "skills": [],
+        }
+
+        card = ParseDict(card_data, AgentCard(), ignore_unknown_fields=True)
+        assert card.HasField("provider")
+        assert card.provider.organization == "Test Org"
+
+    def test_old_format_card_parsed_with_ignore_unknown_fields(self):
+        """Verify v0.2.x card data is parsed gracefully with unknown fields dropped."""
+        card_data = {
+            "protocolVersion": "0.2.9",
+            "name": "Legacy Agent",
+            "description": "An old-format agent",
+            "url": "https://example.com/agent",
+            "version": "1.0.0",
+            "capabilities": {"streaming": True, "pushNotifications": False},
             "defaultInputModes": ["application/json"],
             "defaultOutputModes": ["application/json"],
             "skills": [],
         }
 
-        card = AgentCard.model_validate(card_data)
-        assert card.provider is not None
-        assert card.provider.organization == "Test Org"
+        card = ParseDict(card_data, AgentCard(), ignore_unknown_fields=True)
+        assert card.name == "Legacy Agent"
+        assert card.version == "1.0.0"
 
-    def test_agent_card_missing_required_fields(self):
-        """Test Agent Card validation with missing required fields."""
+    def test_unknown_fields_without_ignore_raises(self):
+        """Verify ParseDict without ignore_unknown_fields raises on unknown fields."""
         card_data = {
-            "name": "Test Agent"
-            # Missing required fields
+            "name": "Test Agent",
+            "unknownField": "should fail",
         }
 
-        with pytest.raises(ValidationError):
-            AgentCard.model_validate(card_data)
+        with pytest.raises(ParseError):
+            ParseDict(card_data, AgentCard(), ignore_unknown_fields=False)
 
 
 class TestProvenance:

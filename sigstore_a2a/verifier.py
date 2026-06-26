@@ -18,6 +18,7 @@ from typing import Any
 
 from a2a.types import AgentCard
 from cryptography import x509
+from google.protobuf.json_format import ParseDict
 from sigstore.models import ClientTrustConfig
 from sigstore.verify import Verifier
 from sigstore.verify.policy import (
@@ -254,7 +255,7 @@ class AgentCardVerifier:
         signed_predicate = statement.get("predicate")
         if signed_predicate is None or not isinstance(signed_predicate, dict):
             raise ValueError("DSSE statement does not contain a valid predicate")
-        return AgentCard.model_validate(signed_predicate)
+        return ParseDict(signed_predicate, AgentCard(), ignore_unknown_fields=True)
 
     def verify_signed_card(
         self,
