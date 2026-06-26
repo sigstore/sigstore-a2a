@@ -90,8 +90,10 @@ jobs:
       - name: Install dependencies
         run: make install
 
-      - name: Get OIDC token
-        uses: sigstore-conformance/extremely-dangerous-public-oidc-beacon@main
+      - name: Fetch OIDC token
+        run: |
+          SIGSTORE_ID_TOKEN=$(curl -sSfL https://storage.googleapis.com/sigstore-conformance-testing-token/untrusted-testing-token.txt)
+          echo "SIGSTORE_ID_TOKEN=$SIGSTORE_ID_TOKEN" >> "$GITHUB_ENV"
 
       - name: Sign GeoRoute Agent Card
         run: |
@@ -99,7 +101,7 @@ jobs:
             --output signed-georoute-agent.json \
             --repository ${{ github.repository }} \
             --provenance \
-            --identity_token "$(cat oidc-token.txt)" \
+            --identity_token "${SIGSTORE_ID_TOKEN}" \
             examples/georoute-agent.json
 
       - name: Sign Data Analysis Agent Card
@@ -108,23 +110,21 @@ jobs:
             --output signed-data-analysis-agent.json \
             --repository ${{ github.repository }} \
             --provenance \
-            --identity_token "$(cat oidc-token.txt)" \
+            --identity_token "${SIGSTORE_ID_TOKEN}" \
             examples/data-analysis-agent.json
 
       - name: Verify GeoRoute Agent Card
         run: |
           uv run sigstore-a2a --verbose verify \
-            --identity_provider "https://token.actions.githubusercontent.com" \
-            --repository "sigstore-conformance/extremely-dangerous-public-oidc-beacon" \
-            --workflow "Extremely dangerous OIDC beacon" \
+            --identity "untrusted-sa@sigstore-conformance.iam.gserviceaccount.com" \
+            --identity_provider "https://accounts.google.com" \
             signed-georoute-agent.json
 
       - name: Verify Data Analysis Agent Card
         run: |
           uv run sigstore-a2a --verbose verify \
-            --identity_provider "https://token.actions.githubusercontent.com" \
-            --repository "sigstore-conformance/extremely-dangerous-public-oidc-beacon" \
-            --workflow "Extremely dangerous OIDC beacon" \
+            --identity "untrusted-sa@sigstore-conformance.iam.gserviceaccount.com" \
+            --identity_provider "https://accounts.google.com" \
             signed-data-analysis-agent.json
 
       - name: Upload signed Agent Cards
