@@ -1,0 +1,11 @@
+{
+  "protocolVersion": "0.2.9",
+  "name": "Minimal Legacy Agent",
+  "description": "A minimal v0.2.x agent card with only required fields.",
+  "url": "https://minimal-agent.example.com",
+  "version": "0.1.0",
+  "capabilities": {},
+  "defaultInputModes": ["application/json"],
+  "defaultOutputModes": ["application/json"],
+  "skills": []
+}

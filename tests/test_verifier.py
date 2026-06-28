@@ -18,7 +18,7 @@ import json
 from unittest.mock import MagicMock
 
 import pytest
-from pydantic import ValidationError
+from google.protobuf.json_format import MessageToDict, ParseDict
 from sigstore.verify.policy import (
     AllOf,
     GitHubWorkflowName,
@@ -35,14 +35,9 @@ from sigstore_a2a.verifier import AgentCardVerifier, IdentityConstraints
 # ---------------------------------------------------------------------------
 
 CARD_DATA = {
-    "protocolVersion": "0.2.9",
     "name": "Test Agent",
     "description": "A test agent",
-    "url": "https://example.com/agent",
     "version": "1.0.0",
-    "capabilities": {"streaming": False, "pushNotifications": False},
-    "defaultInputModes": ["application/json"],
-    "defaultOutputModes": ["application/json"],
     "skills": [
         {
             "id": "test-skill",
@@ -103,9 +98,7 @@ class TestBuildPolicy:
 
     def test_issuer_only_produces_oidc_issuer_policy(self):
         verifier = AgentCardVerifier()
-        constraints = IdentityConstraints(
-            identity_provider="https://accounts.google.com"
-        )
+        constraints = IdentityConstraints(identity_provider="https://accounts.google.com")
         policy = verifier._build_policy(constraints)
         assert isinstance(policy, OIDCIssuer)
 
@@ -167,21 +160,42 @@ class TestExtractVerifiedCard:
     authenticated DSSE payload (the source of truth after sigstore
     verification)."""
 
-    def test_valid_payload_returns_agent_card(self):
-        """A valid DSSE payload with a proper predicate should return an AgentCard."""
+    def test_valid_payload_returns_agent_card_and_raw_data(self):
+        """A valid DSSE payload should return both an AgentCard and raw predicate dict."""
         verifier = AgentCardVerifier()
         payload = _make_dsse_payload(CARD_DATA)
 
-        card = verifier._extract_verified_card(payload)
+        card, raw_data = verifier._extract_verified_card(payload)
         assert card.name == "Test Agent"
         assert card.version == "1.0.0"
+        assert raw_data == CARD_DATA
 
-    def test_empty_predicate_raises(self):
+    def test_empty_predicate_returns_default_card(self):
+        """Proto3 messages have default values, so an empty dict produces a valid AgentCard."""
         verifier = AgentCardVerifier()
         payload = _make_dsse_payload({})
 
-        with pytest.raises(ValidationError):
-            verifier._extract_verified_card(payload)
+        card, raw_data = verifier._extract_verified_card(payload)
+        assert card.name == ""
+        assert card.version == ""
+        assert raw_data == {}
+
+    def test_old_format_card_preserves_url_in_raw_data(self):
+        """Old v0.2.x cards with url field should preserve it in raw_data for backward compat."""
+        verifier = AgentCardVerifier()
+        old_card = {
+            "name": "Legacy Agent",
+            "url": "https://example.com/agent",
+            "version": "1.0.0",
+            "protocolVersion": "0.2.9",
+            "skills": [],
+        }
+        payload = _make_dsse_payload(old_card)
+
+        card, raw_data = verifier._extract_verified_card(payload)
+        assert card.name == "Legacy Agent"
+        assert raw_data["url"] == "https://example.com/agent"
+        assert raw_data["protocolVersion"] == "0.2.9"
 
     def test_missing_predicate_raises(self):
         verifier = AgentCardVerifier()
@@ -239,14 +253,14 @@ class TestVerifySignedCard:
         Args:
             card_data: agent card dict (defaults to CARD_DATA)
             dsse_predicate: what the signed DSSE payload predicate contains
-                            (defaults to agent_card.model_dump)
+                            (defaults to MessageToDict(agent_card))
             verify_raises: if set, verify_dsse will raise this exception
         """
         from a2a.types import AgentCard
 
         data = card_data or CARD_DATA
-        agent_card = AgentCard.model_validate(data)
-        card_json = agent_card.model_dump(by_alias=True, mode="json")
+        agent_card = ParseDict(data, AgentCard(), ignore_unknown_fields=True)
+        card_json = MessageToDict(agent_card)
 
         # Build a mock signed card returned by _parse_signed_card
         mock_signed_card = MagicMock()

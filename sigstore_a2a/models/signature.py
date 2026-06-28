@@ -16,6 +16,7 @@ import json
 from typing import Any
 
 from a2a.types import AgentCard
+from google.protobuf.json_format import MessageToDict, ParseDict
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_serializer, field_validator
 from sigstore.models import Bundle
 
@@ -62,19 +63,31 @@ class SignedAgentCard(BaseModel):
 
     _raw_card_data: dict[str, Any] | None = PrivateAttr(default=None)
 
-    model_config = {"populate_by_name": True}
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        populate_by_name=True,
+    )
+
+    @field_validator("agent_card", mode="before")
+    @classmethod
+    def _agent_card_in(cls, v):
+        if isinstance(v, AgentCard):
+            return v
+        if isinstance(v, dict):
+            return ParseDict(v, AgentCard(), ignore_unknown_fields=True)
+        raise TypeError("Expected AgentCard protobuf message or dict")
+
+    @field_serializer("agent_card")
+    def _agent_card_out(self, v: AgentCard, _info):
+        return MessageToDict(v)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize preserving the original agent card key order.
 
         Uses the raw card data (original JSON key order) when available,
-        falling back to Pydantic's model_dump otherwise.
+        falling back to protobuf MessageToDict otherwise.
         """
-        card_data = (
-            self._raw_card_data
-            if self._raw_card_data is not None
-            else self.agent_card.model_dump(by_alias=True)
-        )
+        card_data = self._raw_card_data if self._raw_card_data is not None else MessageToDict(self.agent_card)
         attestations = self.attestations.model_dump(by_alias=True, exclude_none=True)
         return {"agentCard": card_data, "attestations": attestations}
 
@@ -90,8 +103,11 @@ class SignedAgentCard(BaseModel):
 
     @property
     def url(self) -> str:
-        """Get the agent URL."""
-        return str(self.agent_card.url)
+        """Get the agent URL from the first supported interface."""
+        interfaces = self.agent_card.supported_interfaces
+        if interfaces:
+            return str(interfaces[0].url)
+        return ""
 
 
 def _to_jsonable(v: Any) -> Any:

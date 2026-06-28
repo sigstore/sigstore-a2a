@@ -27,7 +27,8 @@ classifiers = [
   "Typing :: Typed",
 ]
 dependencies = [
-    "a2a-sdk>=0.2.16",
+    "a2a-sdk>=1.0.0,<2.0.0",
+    "protobuf>=4.0.0",
     "sigstore>=4.2.0",
     "pydantic>=2.0.0,<3.0.0",
     "click>=8.0.0",

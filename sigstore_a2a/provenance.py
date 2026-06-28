@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from a2a.types import AgentCard
+from google.protobuf.json_format import MessageToDict, ParseDict
 
 from .models.provenance import (
     BuilderIdentity,
@@ -65,7 +66,7 @@ class ProvenanceBuilder:
         elif isinstance(agent_card, dict):
             card_data = agent_card
         elif isinstance(agent_card, AgentCard):
-            card_data = agent_card.model_dump(by_alias=True)
+            card_data = MessageToDict(agent_card)
         else:
             raise ValueError(f"Invalid agent card type: {type(agent_card)}")
 
@@ -80,7 +81,7 @@ class ProvenanceBuilder:
 
         # Use agent name if not provided
         if name is None:
-            parsed_card = AgentCard.model_validate(card_data)
+            parsed_card = ParseDict(card_data, AgentCard(), ignore_unknown_fields=True)
             name = f"{parsed_card.name}-{parsed_card.version}"
 
         return ProvenanceSubject(name=name, digest=digest_set)

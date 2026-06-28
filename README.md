@@ -300,6 +300,14 @@ class AgentCardVerifier:
 - `staging`: Use Sigstore staging environment
 - `constraints`: IdentityConstraints object for repository/workflow verification
 
+**VerificationResult fields:**
+- `valid`: Whether verification succeeded
+- `agent_card`: Verified AgentCard (protobuf message, extracted from DSSE payload)
+- `raw_card_data`: Raw predicate dict from the DSSE payload, preserving fields that may not map to the current protobuf schema (e.g., `url` from v0.2.x cards)
+- `certificate`: Signing certificate
+- `identity`: Extracted identity information
+- `errors`: List of verification errors
+
 ### ProvenanceBuilder
 
 ```python

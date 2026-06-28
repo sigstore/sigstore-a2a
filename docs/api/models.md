@@ -54,7 +54,7 @@ signed_card = SignedAgentCard.model_validate(data)
 
 # Access the agent card
 print(f"Agent: {signed_card.agent_card.name}")
-print(f"URL: {signed_card.agent_card.url}")
+print(f"URL: {signed_card.url}")  # uses supported_interfaces (v1.0) or empty string
 
 # Access attestations
 print(f"Has signature: {signed_card.attestations.signature_bundle is not None}")
@@ -89,7 +89,7 @@ signed_card = signer.sign_agent_card("agent-card.json")
 
 # Serialize to JSON
 json_str = json.dumps(
-    signed_card.model_dump(by_alias=True),
+    signed_card.to_dict(),
     indent=2,
     default=str
 )

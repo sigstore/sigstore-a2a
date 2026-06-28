@@ -9,7 +9,7 @@ This directory contains example A2A Agent Card JSON files for testing and demons
 
 ## Signed Agent Cards (Staging)
 
-Pre-signed examples using Sigstore **staging** environment with the [OIDC beacon](https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon) identity.
+Pre-signed examples using Sigstore **staging** environment with the [sigstore-conformance testing token](https://storage.googleapis.com/sigstore-conformance-testing-token/untrusted-testing-token.txt) identity.
 
 - `signed-georoute-agent.json`
 - `signed-data-analysis-agent.json`
@@ -19,8 +19,8 @@ Pre-signed examples using Sigstore **staging** environment with the [OIDC beacon
 ```bash
 sigstore-a2a verify examples/signed-georoute-agent.json \
   --staging \
-  --identity_provider https://token.actions.githubusercontent.com \
-  --identity "https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon/.github/workflows/extremely-dangerous-oidc-beacon.yml@refs/heads/main"
+  --identity_provider https://accounts.google.com \
+  --identity "untrusted-sa@sigstore-conformance.iam.gserviceaccount.com"
 ```
 
 ## Usage

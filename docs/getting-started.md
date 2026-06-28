@@ -88,7 +88,7 @@ signed_card = signer.sign_agent_card(card_data)
 # Save the signed card
 import json
 with open("signed-card.json", "w") as f:
-    json.dump(signed_card.model_dump(by_alias=True), f, indent=2)
+    json.dump(signed_card.to_dict(), f, indent=2)
 ```
 
 ### CI/CD Integration

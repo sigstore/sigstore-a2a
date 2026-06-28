@@ -182,10 +182,16 @@ def verify_cmd(
 
                 table.add_row("Name", result.agent_card.name)
                 table.add_row("Version", result.agent_card.version)
-                table.add_row("URL", str(result.agent_card.url))
-                table.add_row("Protocol Version", result.agent_card.protocol_version)
 
-                if result.agent_card.provider:
+                url = ""
+                if result.agent_card.supported_interfaces:
+                    url = str(result.agent_card.supported_interfaces[0].url)
+                elif result.raw_card_data.get("url"):
+                    url = str(result.raw_card_data["url"])
+                if url:
+                    table.add_row("URL", url)
+
+                if result.agent_card.HasField("provider"):
                     table.add_row("Provider", result.agent_card.provider.organization)
 
                 console.print(table)
