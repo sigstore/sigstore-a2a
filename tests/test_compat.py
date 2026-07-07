@@ -251,6 +251,25 @@ class TestSignedAgentCardCompat:
         assert result["agentCard"]["name"] == card_data["name"]
         json.dumps(result)
 
+    @pytest.mark.parametrize(
+        "version_dir,filename",
+        [
+            ("v0_2_x", "agentcard.json"),
+            ("v1_0", "agentcard.json"),
+        ],
+    )
+    def test_to_dict_without_raw_card_data(self, version_dir: str, filename: str):
+        """to_dict falls back to MessageToDict when _raw_card_data is None."""
+        card_data = _load_fixture(version_dir, filename)
+        signed = _build_signed_card(card_data)
+        object.__setattr__(signed, "_raw_card_data", None)
+
+        result = signed.to_dict()
+        assert "agentCard" in result
+        assert "attestations" in result
+        assert result["agentCard"]["name"] == card_data["name"]
+        json.dumps(result)
+
 
 # ---------------------------------------------------------------------------
 # Test: Verification flow with historic card formats
