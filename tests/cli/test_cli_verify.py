@@ -40,12 +40,13 @@ def sample_signed_path(tmp_path: Path) -> Path:
 class _VR:
     """Simple stand-in for VerificationResult."""
 
-    def __init__(self, valid=True, errors=None, agent_card=None, identity=None, certificate=None):
+    def __init__(self, valid=True, errors=None, agent_card=None, identity=None, certificate=None, raw_card_data=None):
         self.valid = valid
         self.errors = errors or []
         self.agent_card = agent_card
         self.identity = identity
         self.certificate = certificate
+        self.raw_card_data = raw_card_data or {}
 
 
 class _RecordingVerifier:
@@ -191,6 +192,79 @@ def test_verify_constraints_are_forwarded(runner: CliRunner, sample_signed_path:
     assert getattr(constraints, "workflow", None) == "ci"
     assert getattr(constraints, "identity", None) == "dev@example.com"
     assert getattr(constraints, "identity_provider", None) == "https://accounts.google.com"
+
+
+def test_verify_displays_v1_card_details(runner: CliRunner, sample_signed_path: Path, monkeypatch):
+    """Verify CLI outputs agent card details including URL from supported_interfaces."""
+    from a2a.types import AgentCard
+    from google.protobuf.json_format import ParseDict
+
+    card = ParseDict(
+        {
+            "name": "V1 Agent",
+            "version": "2.0.0",
+            "description": "test",
+            "supportedInterfaces": [{"url": "https://example.com/a2a"}],
+            "skills": [],
+        },
+        AgentCard(),
+        ignore_unknown_fields=True,
+    )
+
+    class _CardVerifier(_RecordingVerifier):
+        return_result = _VR(valid=True, agent_card=card)
+
+    _patch_verifier(monkeypatch, _CardVerifier)
+
+    result = runner.invoke(
+        verify_cmd,
+        [
+            str(sample_signed_path),
+            "--identity",
+            "dev@example.com",
+            "--identity_provider",
+            "https://accounts.google.com",
+        ],
+        obj={"verbose": False},
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "V1 Agent" in result.output
+    assert "2.0.0" in result.output
+    assert "https://example.com/a2a" in result.output
+
+
+def test_verify_displays_legacy_card_url_from_raw_data(runner: CliRunner, sample_signed_path: Path, monkeypatch):
+    """Verify CLI falls back to raw_card_data for URL when agent card has no supported_interfaces."""
+    from a2a.types import AgentCard
+    from google.protobuf.json_format import ParseDict
+
+    card = ParseDict(
+        {"name": "Legacy Agent", "version": "1.0.0", "description": "old", "skills": []},
+        AgentCard(),
+        ignore_unknown_fields=True,
+    )
+
+    class _LegacyVerifier(_RecordingVerifier):
+        return_result = _VR(valid=True, agent_card=card, raw_card_data={"url": "https://legacy.example.com"})
+
+    _patch_verifier(monkeypatch, _LegacyVerifier)
+
+    result = runner.invoke(
+        verify_cmd,
+        [
+            str(sample_signed_path),
+            "--identity",
+            "dev@example.com",
+            "--identity_provider",
+            "https://accounts.google.com",
+        ],
+        obj={"verbose": False},
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Legacy Agent" in result.output
+    assert "https://legacy.example.com" in result.output
 
 
 def test_verify_requires_existing_file(runner: CliRunner, monkeypatch, tmp_path: Path):
