@@ -21,8 +21,8 @@ import click
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
+from .._signing.sign_sigstore import AgentCardSigner
 from ..provenance import ProvenanceBuilder
-from ..signer import AgentCardSigner
 from ..utils.ci import detect_ci_environment
 from .main import _validate_trust_options
 

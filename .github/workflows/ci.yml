@@ -97,35 +97,35 @@ jobs:
 
       - name: Sign GeoRoute Agent Card
         run: |
-          uv run sigstore-a2a sign \
+          uv run sigstore-a2a sign sigstore \
+            examples/georoute-agent.json \
             --output signed-georoute-agent.json \
             --repository ${{ github.repository }} \
             --provenance \
-            --identity_token "${SIGSTORE_ID_TOKEN}" \
-            examples/georoute-agent.json
+            --identity_token "${SIGSTORE_ID_TOKEN}"
 
       - name: Sign Data Analysis Agent Card
         run: |
-          uv run sigstore-a2a sign \
+          uv run sigstore-a2a sign sigstore \
+            examples/data-analysis-agent.json \
             --output signed-data-analysis-agent.json \
             --repository ${{ github.repository }} \
             --provenance \
-            --identity_token "${SIGSTORE_ID_TOKEN}" \
-            examples/data-analysis-agent.json
+            --identity_token "${SIGSTORE_ID_TOKEN}"
 
       - name: Verify GeoRoute Agent Card
         run: |
-          uv run sigstore-a2a --verbose verify \
+          uv run sigstore-a2a --verbose verify sigstore \
+            signed-georoute-agent.json \
             --identity "untrusted-sa@sigstore-conformance.iam.gserviceaccount.com" \
-            --identity_provider "https://accounts.google.com" \
-            signed-georoute-agent.json
+            --identity_provider "https://accounts.google.com"
 
       - name: Verify Data Analysis Agent Card
         run: |
-          uv run sigstore-a2a --verbose verify \
+          uv run sigstore-a2a --verbose verify sigstore \
+            signed-data-analysis-agent.json \
             --identity "untrusted-sa@sigstore-conformance.iam.gserviceaccount.com" \
-            --identity_provider "https://accounts.google.com" \
-            signed-data-analysis-agent.json
+            --identity_provider "https://accounts.google.com"
 
       - name: Upload signed Agent Cards
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

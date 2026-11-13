@@ -25,13 +25,21 @@ __version__ = "0.4.0"
 def __getattr__(name: str):
     """Lazy imports to avoid dependency issues."""
     if name == "AgentCardSigner":
-        from .signer import AgentCardSigner
+        from ._signing.sign_sigstore import AgentCardSigner
 
         return AgentCardSigner
     elif name == "AgentCardVerifier":
-        from .verifier import AgentCardVerifier
+        from ._signing.verify_sigstore import AgentCardVerifier
 
         return AgentCardVerifier
+    elif name == "ECKeyAgentCardSigner":
+        from ._signing.sign_ec_key import ECKeyAgentCardSigner
+
+        return ECKeyAgentCardSigner
+    elif name == "ECKeyAgentCardVerifier":
+        from ._signing.verify_ec_key import ECKeyAgentCardVerifier
+
+        return ECKeyAgentCardVerifier
     elif name == "ProvenanceBuilder":
         from .provenance import ProvenanceBuilder
 
