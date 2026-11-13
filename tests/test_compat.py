@@ -33,8 +33,8 @@ import pytest
 from a2a.types import AgentCard
 from google.protobuf.json_format import MessageToDict, ParseDict
 
+from sigstore_a2a._signing.verify_sigstore import AgentCardVerifier
 from sigstore_a2a.models.signature import SignedAgentCard
-from sigstore_a2a.verifier import AgentCardVerifier
 
 FIXTURES_DIR = Path(__file__).parent / "historic"
 

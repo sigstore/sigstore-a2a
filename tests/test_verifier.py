@@ -28,7 +28,7 @@ from sigstore.verify.policy import (
     UnsafeNoOp,
 )
 
-from sigstore_a2a.verifier import AgentCardVerifier, IdentityConstraints
+from sigstore_a2a._signing.verify_sigstore import AgentCardVerifier, IdentityConstraints
 
 # ---------------------------------------------------------------------------
 # Shared fixtures

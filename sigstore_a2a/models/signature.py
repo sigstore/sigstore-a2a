@@ -26,7 +26,9 @@ from .provenance import SLSAProvenance
 class Attestations(BaseModel):
     """Verification material for Agent Card signatures."""
 
-    signature_bundle: Bundle = Field(..., alias="signatureBundle", description="Sigstore signature bundle")
+    signature_bundle: Bundle | dict = Field(
+        ..., alias="signatureBundle", description="Signature bundle (Sigstore Bundle or PKI bundle dict)"
+    )
     provenance_bundle: SLSAProvenance | None = Field(
         None, alias="provenanceBundle", description="SLSA provenance attestation"
     )
@@ -40,19 +42,27 @@ class Attestations(BaseModel):
     @field_validator("signature_bundle", mode="before")
     @classmethod
     def _bundle_in(cls, v):
-        if v is None or isinstance(v, Bundle):
+        if v is None or isinstance(v, Bundle | dict):
+            if isinstance(v, dict):
+                try:
+                    return Bundle.from_json(json.dumps(v))
+                except Exception:
+                    return v
             return v
-        if isinstance(v, dict):
-            return Bundle.from_json(json.dumps(v))
         if isinstance(v, str):
-            return Bundle.from_json(v)
+            try:
+                return Bundle.from_json(v)
+            except Exception:
+                return json.loads(v)
         raise TypeError("Expected sigstore.models.Bundle, dict, or JSON string")
 
     @field_serializer("signature_bundle")
-    def _bundle_out(self, v: Bundle, _info):
+    def _bundle_out(self, v: Bundle | dict, _info):
         if v is None:
             return None
-        return json.loads(v.to_json())
+        if isinstance(v, Bundle):
+            return json.loads(v.to_json())
+        return v
 
 
 class SignedAgentCard(BaseModel):

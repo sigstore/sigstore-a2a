@@ -18,7 +18,7 @@ if result.valid:
 
 ## API Reference
 
-::: sigstore_a2a.verifier.AgentCardVerifier
+::: sigstore_a2a._signing.verify_sigstore.AgentCardVerifier
     options:
       show_root_heading: true
       show_source: true
@@ -27,12 +27,12 @@ if result.valid:
         - verify_signed_card
         - verify_file
 
-::: sigstore_a2a.verifier.IdentityConstraints
+::: sigstore_a2a._signing.verify_sigstore.IdentityConstraints
     options:
       show_root_heading: true
       show_source: true
 
-::: sigstore_a2a.verifier.VerificationResult
+::: sigstore_a2a._signing.common.VerificationResult
     options:
       show_root_heading: true
       show_source: true
@@ -64,7 +64,7 @@ else:
 
 ```python
 from sigstore_a2a import AgentCardVerifier
-from sigstore_a2a.verifier import IdentityConstraints
+from sigstore_a2a._signing.verify_sigstore import IdentityConstraints
 
 verifier = AgentCardVerifier(
     oidc_issuer="https://token.actions.githubusercontent.com"

@@ -19,7 +19,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
-from ..verifier import AgentCardVerifier, IdentityConstraints
+from .._signing.verify_sigstore import AgentCardVerifier, IdentityConstraints
 from .main import _validate_trust_options
 
 console = Console()

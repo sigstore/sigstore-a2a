@@ -23,7 +23,9 @@ from a2a.types import AgentCard
 from fastapi.testclient import TestClient
 from google.protobuf.json_format import ParseDict
 
+from sigstore_a2a._signing.sign_ec_key import ECKeyAgentCardSigner
 from sigstore_a2a.cli.serve import create_app
+from tests.conftest import generate_ec_keypair
 
 FIXTURES_DIR = Path(__file__).parent.parent / "historic"
 
@@ -136,3 +138,60 @@ class TestServeEndpoints:
                 assert resp.status_code == 200
                 data = resp.json()
                 assert data["agent"]["name"] == v0_2_card_data["name"]
+
+
+SAMPLE_CARD = {
+    "name": "serve-test-agent",
+    "version": "1.0.0",
+    "url": "https://example.com/agent",
+    "skills": [{"id": "s1", "name": "Skill", "description": "A skill"}],
+}
+
+
+def _sign_card_with_ec_key(tmp_path: Path):
+    key_path, pub_path = generate_ec_keypair(tmp_path / "keys")
+    signer = ECKeyAgentCardSigner(private_key_path=key_path)
+    signed = signer.sign_agent_card(SAMPLE_CARD)
+    signed_path = tmp_path / "signed.json"
+    signed_path.write_text(json.dumps(signed.to_dict(), default=str))
+    return signed_path, pub_path
+
+
+class TestServeWithECKey:
+    def test_serve_ec_key_signed_card_with_public_key(self, tmp_path):
+        signed_path, pub_path = _sign_card_with_ec_key(tmp_path)
+
+        app = create_app(signed_path, verify_on_serve=True, public_key_path=pub_path)
+        with TestClient(app) as client:
+            resp = client.get("/.well-known/agent.json")
+            assert resp.status_code == 200
+            assert resp.json()["name"] == "serve-test-agent"
+
+    def test_serve_ec_key_signed_card_wrong_key_fails(self, tmp_path):
+        signed_path, _ = _sign_card_with_ec_key(tmp_path)
+        _, wrong_pub = generate_ec_keypair(tmp_path / "wrong")
+
+        app = create_app(signed_path, verify_on_serve=True, public_key_path=wrong_pub)
+        with pytest.raises(Exception, match="verification failed"):
+            with TestClient(app):
+                pass
+
+    def test_serve_ec_key_signed_card_no_verify(self, tmp_path):
+        signed_path, _ = _sign_card_with_ec_key(tmp_path)
+
+        app = create_app(signed_path, verify_on_serve=False)
+        with TestClient(app) as client:
+            resp = client.get("/.well-known/agent.json")
+            assert resp.status_code == 200
+
+    def test_serve_ec_key_signed_card_endpoints(self, tmp_path):
+        signed_path, pub_path = _sign_card_with_ec_key(tmp_path)
+
+        app = create_app(signed_path, verify_on_serve=True, public_key_path=pub_path)
+        with TestClient(app) as client:
+            signed_resp = client.get("/.well-known/agent.signed.json")
+            assert signed_resp.status_code == 200
+            assert "attestations" in signed_resp.json()
+
+            health_resp = client.get("/health")
+            assert health_resp.json()["status"] == "healthy"

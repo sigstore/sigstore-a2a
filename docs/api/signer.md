@@ -16,7 +16,7 @@ signed_card = signer.sign_agent_card("agent-card.json")
 
 ## API Reference
 
-::: sigstore_a2a.signer.AgentCardSigner
+::: sigstore_a2a._signing.sign_sigstore.AgentCardSigner
     options:
       show_root_heading: true
       show_source: true
