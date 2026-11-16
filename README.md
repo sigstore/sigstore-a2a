@@ -94,46 +94,46 @@ sigstore-a2a verify signed-card.json \
 
 ### Library Usage
 
+The recommended library API uses the `Config` builder pattern to select a signing or
+verification method:
+
 ```python
-# --- EC key signing ---
-from sigstore_a2a import ECKeyAgentCardSigner, ECKeyAgentCardVerifier
 from pathlib import Path
+from sigstore_a2a.signing import SigningConfig
+from sigstore_a2a.verifying import VerifyingConfig
 
-signer = ECKeyAgentCardSigner(private_key_path=Path("private.pem"))
-signed = signer.sign_agent_card("agent-card.json")
-
-verifier = ECKeyAgentCardVerifier(public_key_path=Path("public.pem"))
-result = verifier.verify_signed_card(signed)
+# --- EC key ---
+signed = SigningConfig().use_elliptic_key_signer(private_key=Path("private.pem")).sign_card("agent-card.json")
+result = VerifyingConfig().use_elliptic_key_verifier(public_key=Path("public.pem")).verify(signed)
 
 if result.valid:
     print(f"Verified: {result.agent_card.name}")
 else:
     print(f"Failed: {result.errors}")
 
-# --- Certificate signing ---
-from sigstore_a2a import CertificateAgentCardSigner, CertificateAgentCardVerifier
-
-signer = CertificateAgentCardSigner(
-    private_key_path=Path("private.pem"),
-    signing_cert_path=Path("cert.pem"),
-    cert_chain_paths=[Path("ca.pem")],
+# --- Certificate ---
+signed = (
+    SigningConfig()
+    .use_certificate_signer(
+        private_key=Path("private.pem"),
+        signing_cert=Path("cert.pem"),
+        cert_chain=[Path("ca.pem")],
+    )
+    .sign_card("agent-card.json")
 )
-signed = signer.sign_agent_card("agent-card.json")
+result = VerifyingConfig().use_certificate_verifier(cert_chain=[Path("ca.pem")]).verify(signed)
 
-verifier = CertificateAgentCardVerifier(cert_chain_paths=[Path("ca.pem")])
-result = verifier.verify_signed_card(signed)
-
-# --- Sigstore keyless signing ---
-from sigstore_a2a import AgentCardSigner, AgentCardVerifier
-
-signer = AgentCardSigner(use_ambient_credentials=True)
-signed = signer.sign_agent_card("agent-card.json")
-
-verifier = AgentCardVerifier(
-    identity="dev@example.com",
-    oidc_issuer="https://accounts.google.com",
+# --- Sigstore keyless (default if no method selected) ---
+signed = SigningConfig().sign_card("agent-card.json")
+result = (
+    VerifyingConfig()
+    .use_sigstore_verifier(identity="dev@example.com", oidc_issuer="https://accounts.google.com")
+    .verify(signed)
 )
-result = verifier.verify_signed_card(signed)
+
+# --- Sign to file ---
+SigningConfig().use_elliptic_key_signer(private_key=Path("key.pem")).sign("agent-card.json", Path("signed.json"))
+result = VerifyingConfig().use_elliptic_key_verifier(public_key=Path("pub.pem")).verify_file("signed.json")
 ```
 
 ## CLI Reference
@@ -326,6 +326,38 @@ jobs:
 ```
 
 ## API Reference
+
+### SigningConfig
+
+```python
+from sigstore_a2a.signing import SigningConfig
+
+SigningConfig()
+    .use_sigstore_signer(identity_token=None, staging=False, ...)  -> Self
+    .use_elliptic_key_signer(private_key: Path, password=None)     -> Self
+    .use_certificate_signer(private_key: Path, signing_cert: Path,
+                            cert_chain: Iterable[Path] = ())       -> Self
+    .sign_card(agent_card, provenance_bundle=None)  -> SignedAgentCard
+    .sign(agent_card, output_path: Path, provenance_bundle=None) -> Path
+```
+
+Defaults to Sigstore keyless signing if no `use_*` method is called.
+
+### VerifyingConfig
+
+```python
+from sigstore_a2a.verifying import VerifyingConfig
+
+VerifyingConfig()
+    .use_sigstore_verifier(identity=None, oidc_issuer=None, ...)  -> Self
+    .use_elliptic_key_verifier(public_key: Path)                  -> Self
+    .use_certificate_verifier(cert_chain: Iterable[Path] = (),
+                              expected_san_uris: Iterable[str] = ()) -> Self
+    .verify(signed_card)      -> VerificationResult
+    .verify_file(file_path)   -> VerificationResult
+```
+
+Raises `ValueError` if no `use_*` method is called (no default).
 
 ### ECKeyAgentCardSigner
 

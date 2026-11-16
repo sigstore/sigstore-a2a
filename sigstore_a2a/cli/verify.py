@@ -19,7 +19,12 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
-from .._signing.verify_sigstore import AgentCardVerifier, IdentityConstraints
+from .._signing.verify_sigstore import IdentityConstraints
+from ..verifying import VerifyingConfig
+
+# Sigstore verify needs constraints (repository/workflow) which are passed
+# directly to the underlying verifier. The Config exposes the verifier
+# for this purpose via _get_verifier().
 from .main import _validate_trust_options
 
 console = Console()
@@ -161,7 +166,7 @@ def verify_cmd(
             SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console, transient=True
         ) as progress:
             progress.add_task("Initializing verifier...", total=None)
-            verifier = AgentCardVerifier(
+            verifier_config = VerifyingConfig().use_sigstore_verifier(
                 identity=identity,
                 oidc_issuer=identity_provider,
                 staging=staging,
@@ -170,6 +175,7 @@ def verify_cmd(
             )
 
             progress.add_task("Verifying signature...", total=None)
+            verifier = verifier_config._get_verifier()
             result = verifier.verify_signed_card(signed_card, constraints)
 
         if result.valid:

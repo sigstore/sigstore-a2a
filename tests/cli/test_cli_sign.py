@@ -82,8 +82,21 @@ class _RecordingProvenanceBuilder:
         }
 
 
+class _MockSigningConfig:
+    """Mock SigningConfig that wraps _RecordingSigner."""
+
+    def use_sigstore_signer(self, **kwargs):
+        _RecordingSigner.last_init_kwargs = dict(kwargs)
+        return self
+
+    def sign_card(self, agent_card, provenance_bundle=None):
+        _RecordingSigner.last_sign_kwargs = {"agent_card": Path(agent_card), "provenance_bundle": provenance_bundle}
+        card = json.loads(Path(agent_card).read_text(encoding="utf-8"))
+        return _DummySigned(card)
+
+
 def _patch_cmd_module(monkeypatch):
-    monkeypatch.setattr("sigstore_a2a.cli.sign.AgentCardSigner", _RecordingSigner, raising=True)
+    monkeypatch.setattr("sigstore_a2a.cli.sign.SigningConfig", lambda: _MockSigningConfig(), raising=True)
     monkeypatch.setattr("sigstore_a2a.cli.sign.ProvenanceBuilder", _RecordingProvenanceBuilder, raising=True)
 
 

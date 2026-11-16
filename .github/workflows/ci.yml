@@ -98,7 +98,7 @@ jobs:
       - name: Sign GeoRoute Agent Card
         run: |
           uv run sigstore-a2a sign sigstore \
-            examples/georoute-agent.json \
+            examples/agent-cards/georoute-agent.json \
             --output signed-georoute-agent.json \
             --repository ${{ github.repository }} \
             --provenance \
@@ -107,7 +107,7 @@ jobs:
       - name: Sign Data Analysis Agent Card
         run: |
           uv run sigstore-a2a sign sigstore \
-            examples/data-analysis-agent.json \
+            examples/agent-cards/data-analysis-agent.json \
             --output signed-data-analysis-agent.json \
             --repository ${{ github.repository }} \
             --provenance \

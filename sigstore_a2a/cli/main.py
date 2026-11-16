@@ -253,14 +253,14 @@ def _sign_certificate(
         --private-key key.pem --signing-cert cert.pem --cert-chain ca.pem
     """
     try:
-        from .._signing.sign_certificate import CertificateAgentCardSigner
         from ..provenance import ProvenanceBuilder
+        from ..signing import SigningConfig
 
         verbose = ctx.obj.get("verbose", False)
-        signer = CertificateAgentCardSigner(
-            private_key_path=private_key,
-            signing_cert_path=signing_cert,
-            cert_chain_paths=list(cert_chain),
+        config = SigningConfig().use_certificate_signer(
+            private_key=private_key,
+            signing_cert=signing_cert,
+            cert_chain=list(cert_chain),
         )
 
         provenance_bundle = None
@@ -274,18 +274,19 @@ def _sign_certificate(
             if verbose:
                 console.print("[green]SLSA provenance generated[/green]")
 
-        import json
-
-        signed_card = signer.sign_agent_card(agent_card, provenance_bundle=provenance_bundle)
         out_path = output or agent_card.with_suffix(".signed.json")
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(out_path, "w", encoding="utf-8", newline="\n") as f:
-            json.dump(signed_card.to_dict(), f, indent=2, ensure_ascii=False, default=str)
+        config.sign(agent_card, out_path, provenance_bundle=provenance_bundle)
 
         console.print("[green]✓[/green] Agent Card signed successfully (certificate)")
         console.print(f"[blue]Signed card written to: {out_path}[/blue]")
+        if provenance_bundle and verbose:
+            console.print("[dim]SLSA provenance included[/dim]")
+    except click.ClickException:
+        raise
     except Exception as e:
         console.print(f"[red]✗[/red] Failed to sign Agent Card: {e}")
+        if verbose:
+            console.print_exception()
         raise click.ClickException(str(e)) from e
 
 
@@ -375,13 +376,13 @@ def _verify_certificate(
         --cert-chain ca.pem --san-uri spiffe://example.com/agent
     """
     try:
-        from .._signing.verify_certificate import CertificateAgentCardVerifier
+        from ..verifying import VerifyingConfig
 
-        verifier = CertificateAgentCardVerifier(
-            cert_chain_paths=list(cert_chain),
-            expected_san_uris=list(san_uri),
+        result = (
+            VerifyingConfig()
+            .use_certificate_verifier(cert_chain=list(cert_chain), expected_san_uris=list(san_uri))
+            .verify_file(signed_card)
         )
-        result = verifier.verify_signed_card(signed_card)
 
         if result.valid:
             console.print("[green]✓[/green] Agent Card signature is valid (certificate)")
@@ -406,7 +407,10 @@ def _verify_certificate(
     except click.ClickException:
         raise
     except Exception as e:
+        verbose = ctx.obj.get("verbose", False)
         console.print(f"[red]✗[/red] Failed to verify Agent Card: {e}")
+        if verbose:
+            console.print_exception()
         raise click.ClickException(str(e)) from e
 
 

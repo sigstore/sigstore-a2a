@@ -21,8 +21,8 @@ import click
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from .._signing.sign_sigstore import AgentCardSigner
 from ..provenance import ProvenanceBuilder
+from ..signing import SigningConfig
 from ..utils.ci import detect_ci_environment
 from .main import _validate_trust_options
 
@@ -203,7 +203,7 @@ def sign_cmd(
             transient=True,
         ) as progress:
             progress.add_task("Initializing signer...", total=None)
-            signer = AgentCardSigner(
+            config = SigningConfig().use_sigstore_signer(
                 staging=staging,
                 instance=instance,
                 trust_config=trust_config,
@@ -211,7 +211,6 @@ def sign_cmd(
                 client_id=client_id,
                 client_secret=client_secret,
                 use_ambient_credentials=use_ambient_credentials,
-                verbose=verbose,
             )
 
             # Optionally generate provenance
@@ -233,9 +232,8 @@ def sign_cmd(
                     console.print(f"[yellow]{msg}[/yellow]" if not verbose else f"[yellow]{msg}[/yellow]")
 
             progress.add_task("Signing Agent Card...", total=None)
-            signed_card = signer.sign_agent_card(agent_card=agent_card, provenance_bundle=provenance_bundle)
-
             out_path = output or agent_card.with_suffix(".signed.json")
+            signed_card = config.sign_card(agent_card, provenance_bundle=provenance_bundle)
 
             progress.add_task("Writing signed Agent Card...", total=None)
             out_path.parent.mkdir(parents=True, exist_ok=True)
