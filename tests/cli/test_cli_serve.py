@@ -20,9 +20,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from a2a.types import AgentCard
+from cryptography.hazmat.primitives import serialization
 from fastapi.testclient import TestClient
 from google.protobuf.json_format import ParseDict
 
+from sigstore_a2a._signing.sign_certificate import CertificateAgentCardSigner
 from sigstore_a2a._signing.sign_ec_key import ECKeyAgentCardSigner
 from sigstore_a2a.cli.serve import create_app
 from tests.conftest import generate_ec_keypair
@@ -195,3 +197,81 @@ class TestServeWithECKey:
 
             health_resp = client.get("/health")
             assert health_resp.json()["status"] == "healthy"
+
+
+def _sign_card_with_certificate(tmp_path: Path):
+    import datetime
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.x509 import oid
+
+    key_path, _ = generate_ec_keypair(tmp_path / "keys")
+    private_key = serialization.load_pem_private_key(key_path.read_bytes(), password=None)
+
+    subject = x509.Name([x509.NameAttribute(oid.NameOID.COMMON_NAME, "Serve Test")])
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(subject)
+        .public_key(private_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime.now(datetime.UTC) - datetime.timedelta(hours=1))
+        .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                key_encipherment=False,
+                content_commitment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
+        .add_extension(x509.ExtendedKeyUsage([oid.ExtendedKeyUsageOID.CODE_SIGNING]), critical=False)
+        .sign(private_key, hashes.SHA256())
+    )
+    cert_path = tmp_path / "cert.pem"
+    cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+
+    signer = CertificateAgentCardSigner(
+        private_key_path=key_path,
+        signing_cert_path=cert_path,
+        cert_chain_paths=[cert_path],
+    )
+    signed = signer.sign_agent_card(SAMPLE_CARD)
+    signed_path = tmp_path / "signed-cert.json"
+    signed_path.write_text(json.dumps(signed.to_dict(), default=str))
+    return signed_path, cert_path
+
+
+class TestServeWithCertificate:
+    def test_serve_cert_signed_card_with_chain(self, tmp_path):
+        signed_path, cert_path = _sign_card_with_certificate(tmp_path)
+
+        app = create_app(signed_path, verify_on_serve=True, cert_chain_paths=[cert_path])
+        with TestClient(app) as client:
+            resp = client.get("/.well-known/agent.json")
+            assert resp.status_code == 200
+            assert resp.json()["name"] == "serve-test-agent"
+
+    def test_serve_cert_signed_card_wrong_chain_fails(self, tmp_path):
+        signed_path, _ = _sign_card_with_certificate(tmp_path)
+        _, wrong_cert_path = _sign_card_with_certificate(tmp_path / "other")
+
+        app = create_app(signed_path, verify_on_serve=True, cert_chain_paths=[wrong_cert_path])
+        with pytest.raises(ValueError, match="verification failed"):
+            with TestClient(app):
+                pass
+
+    def test_serve_cert_signed_card_no_verify(self, tmp_path):
+        signed_path, _ = _sign_card_with_certificate(tmp_path)
+
+        app = create_app(signed_path, verify_on_serve=False)
+        with TestClient(app) as client:
+            resp = client.get("/.well-known/agent.json")
+            assert resp.status_code == 200

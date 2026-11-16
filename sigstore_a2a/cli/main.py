@@ -31,7 +31,7 @@ console = Console()
 class _PKICmdGroup(click.Group):
     """Custom group that defaults to the ``sigstore`` subcommand."""
 
-    _supported_modes = ["sigstore", "key"]
+    _supported_modes = ["sigstore", "key", "certificate"]
 
     def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
         if cmd_name in self._supported_modes:
@@ -215,15 +215,89 @@ def _sign_key(
         raise click.ClickException("EC key signing unavailable") from e
 
 
+@_sign.command(name="certificate")
+@_agent_card_arg
+@click.option("--private-key", required=True, type=click.Path(exists=True, path_type=Path), help="PEM EC private key.")
+@click.option(
+    "--signing-cert", required=True, type=click.Path(exists=True, path_type=Path), help="PEM signing certificate."
+)
+@click.option(
+    "--cert-chain",
+    multiple=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="PEM certificate(s) for the trust chain (repeatable).",
+)
+@_output
+@_provenance
+@_repository
+@_commit_sha
+@_workflow_ref
+@click.pass_context
+def _sign_certificate(
+    ctx: click.Context,
+    agent_card: Path,
+    private_key: Path,
+    signing_cert: Path,
+    cert_chain: tuple[Path, ...],
+    output: Path | None,
+    provenance: bool,
+    repository: str | None,
+    commit_sha: str | None,
+    workflow_ref: str | None,
+):
+    """Sign using a certificate and trust chain.
+
+    Examples:
+
+      sigstore-a2a sign certificate agent-card.json \\
+        --private-key key.pem --signing-cert cert.pem --cert-chain ca.pem
+    """
+    try:
+        from .._signing.sign_certificate import CertificateAgentCardSigner
+        from ..provenance import ProvenanceBuilder
+
+        verbose = ctx.obj.get("verbose", False)
+        signer = CertificateAgentCardSigner(
+            private_key_path=private_key,
+            signing_cert_path=signing_cert,
+            cert_chain_paths=list(cert_chain),
+        )
+
+        provenance_bundle = None
+        if provenance:
+            provenance_bundle = ProvenanceBuilder().build_provenance(
+                agent_card=agent_card,
+                source_repo=repository,
+                commit_sha=commit_sha,
+                workflow_ref=workflow_ref,
+            )
+            if verbose:
+                console.print("[green]SLSA provenance generated[/green]")
+
+        import json
+
+        signed_card = signer.sign_agent_card(agent_card, provenance_bundle=provenance_bundle)
+        out_path = output or agent_card.with_suffix(".signed.json")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(signed_card.to_dict(), f, indent=2, ensure_ascii=False, default=str)
+
+        console.print("[green]✓[/green] Agent Card signed successfully (certificate)")
+        console.print(f"[blue]Signed card written to: {out_path}[/blue]")
+    except Exception as e:
+        console.print(f"[red]✗[/red] Failed to sign Agent Card: {e}")
+        raise click.ClickException(str(e)) from e
+
+
 # ===================================================================
-# verify  (group — subcommands: sigstore | key)
+# verify  (group — subcommands: sigstore | key | certificate)
 # ===================================================================
 @cli.group(name="verify", subcommand_metavar="PKI_METHOD", cls=_PKICmdGroup)
 @click.pass_context
 def _verify(ctx: click.Context) -> None:
     """Verify a signed A2A Agent Card.
 
-    Supported PKI methods (subcommands): sigstore (default), key.
+    Supported PKI methods (subcommands): sigstore (default), key, certificate.
     If no method is given, Sigstore verification is used.
     """
 
@@ -276,6 +350,66 @@ def _verify_key(ctx: click.Context, signed_card: Path, public_key: Path):
         raise click.ClickException("EC key verification unavailable") from e
 
 
+@_verify.command(name="certificate")
+@_signed_card_arg
+@click.option(
+    "--cert-chain",
+    multiple=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="PEM certificate(s) for chain-of-trust verification (repeatable).",
+)
+@click.option("--san-uri", multiple=True, type=str, help="Expected SAN URI (repeatable).")
+@click.pass_context
+def _verify_certificate(
+    ctx: click.Context,
+    signed_card: Path,
+    cert_chain: tuple[Path, ...],
+    san_uri: tuple[str, ...],
+):
+    """Verify using a certificate chain.
+
+    Examples:
+
+      sigstore-a2a verify certificate signed-card.json --cert-chain ca.pem
+      sigstore-a2a verify certificate signed-card.json \\
+        --cert-chain ca.pem --san-uri spiffe://example.com/agent
+    """
+    try:
+        from .._signing.verify_certificate import CertificateAgentCardVerifier
+
+        verifier = CertificateAgentCardVerifier(
+            cert_chain_paths=list(cert_chain),
+            expected_san_uris=list(san_uri),
+        )
+        result = verifier.verify_signed_card(signed_card)
+
+        if result.valid:
+            console.print("[green]✓[/green] Agent Card signature is valid (certificate)")
+            if result.agent_card:
+                from rich.table import Table
+
+                table = Table(title="Agent Card Details")
+                table.add_column("Field", style="cyan")
+                table.add_column("Value", style="white")
+                table.add_row("Name", result.agent_card.name)
+                table.add_row("Version", result.agent_card.version)
+                console.print(table)
+            if result.certificate:
+                verbose = ctx.obj.get("verbose", False)
+                if verbose:
+                    console.print(f"[dim]Certificate subject: {result.certificate.subject.rfc4514_string()}[/dim]")
+        else:
+            console.print("[red]✗[/red] Agent Card signature verification failed")
+            for error in result.errors:
+                console.print(f"[red]Error:[/red] {error}")
+            raise click.ClickException("Signature verification failed")
+    except click.ClickException:
+        raise
+    except Exception as e:
+        console.print(f"[red]✗[/red] Failed to verify Agent Card: {e}")
+        raise click.ClickException(str(e)) from e
+
+
 # ===================================================================
 # serve
 # ===================================================================
@@ -287,13 +421,20 @@ def _verify_key(ctx: click.Context, signed_card: Path, public_key: Path):
 @click.option(
     "--public-key", type=click.Path(exists=True, path_type=Path), help="PEM EC public key (EC key verification)."
 )
+@click.option(
+    "--cert-chain",
+    multiple=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="PEM certificate(s) for chain-of-trust verification (repeatable).",
+)
 @_no_verify
 @_reload
 @click.pass_context
 def serve_cmd_direct(ctx: click.Context, **kwargs):
     """Serve a signed Agent Card at well-known endpoints.
 
-    Verifies on startup with Sigstore (default) or --public-key for EC key cards.
+    Verifies on startup with Sigstore (default), --public-key (EC key),
+    or --cert-chain (certificate).
     """
     try:
         from .serve import serve_cmd

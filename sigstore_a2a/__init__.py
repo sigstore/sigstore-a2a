@@ -40,6 +40,14 @@ def __getattr__(name: str):
         from ._signing.verify_ec_key import ECKeyAgentCardVerifier
 
         return ECKeyAgentCardVerifier
+    elif name == "CertificateAgentCardSigner":
+        from ._signing.sign_certificate import CertificateAgentCardSigner
+
+        return CertificateAgentCardSigner
+    elif name == "CertificateAgentCardVerifier":
+        from ._signing.verify_certificate import CertificateAgentCardVerifier
+
+        return CertificateAgentCardVerifier
     elif name == "ProvenanceBuilder":
         from .provenance import ProvenanceBuilder
 
