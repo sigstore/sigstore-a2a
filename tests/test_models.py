@@ -79,6 +79,52 @@ class TestAgentCard:
             ParseDict(card_data, AgentCard(), ignore_unknown_fields=False)
 
 
+class TestAttestationsBundleType:
+    """Test that Attestations model accepts both Bundle and dict for signature_bundle."""
+
+    def test_pki_dict_bundle_stays_as_dict(self):
+        """A PKI bundle dict (rejected by sigstore Bundle.from_json) stays as dict."""
+        from sigstore_a2a.models.signature import Attestations
+
+        pki_bundle = {
+            "mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
+            "verificationMaterial": {"publicKey": {"hint": "abc"}, "tlogEntries": []},
+            "dsseEnvelope": {
+                "payload": "dGVzdA==",
+                "payloadType": "application/vnd.in-toto+json",
+                "signatures": [{"sig": "dGVzdA==", "keyid": ""}],
+            },
+        }
+
+        att = Attestations(signature_bundle=pki_bundle, provenance_bundle=None)
+        assert isinstance(att.signature_bundle, dict)
+
+    def test_attestations_rejects_unsupported_type(self):
+        """Unsupported types raise TypeError."""
+        from sigstore_a2a.models.signature import Attestations
+
+        with pytest.raises((TypeError, ValueError)):
+            Attestations(signature_bundle=12345, provenance_bundle=None)
+
+    def test_pki_bundle_serializes_as_dict(self):
+        """A dict bundle round-trips through model_dump correctly."""
+        from sigstore_a2a.models.signature import Attestations
+
+        pki_bundle = {
+            "mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
+            "verificationMaterial": {"publicKey": {"hint": "abc"}, "tlogEntries": []},
+            "dsseEnvelope": {
+                "payload": "dGVzdA==",
+                "payloadType": "application/vnd.in-toto+json",
+                "signatures": [{"sig": "dGVzdA==", "keyid": ""}],
+            },
+        }
+
+        att = Attestations(signature_bundle=pki_bundle, provenance_bundle=None)
+        dumped = att.model_dump(by_alias=True, exclude_none=True)
+        assert dumped["signatureBundle"] == pki_bundle
+
+
 class TestProvenance:
     """Test SLSA provenance models."""
 

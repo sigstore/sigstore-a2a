@@ -129,7 +129,7 @@ sigstore-a2a verify signed-card.json \
 
 ```python
 from sigstore_a2a import AgentCardVerifier
-from sigstore_a2a.verifier import IdentityConstraints
+from sigstore_a2a._signing.verify_sigstore import IdentityConstraints
 
 # Create a verifier
 verifier = AgentCardVerifier(

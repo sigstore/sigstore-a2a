@@ -23,24 +23,19 @@ from fastapi.responses import JSONResponse
 from google.protobuf.json_format import MessageToDict
 from rich.console import Console
 
+from .._signing.verify_ec_key import ECKeyAgentCardVerifier
+from .._signing.verify_sigstore import AgentCardVerifier
 from ..models.signature import SignedAgentCard
-from ..verifier import AgentCardVerifier
 
 console = Console()
 
 
-def create_app(signed_card_path: Path, verify_on_serve: bool = True, staging: bool = False) -> FastAPI:
-    """Create FastAPI app for serving Agent Card.
-
-    Args:
-        signed_card_path: Path to signed Agent Card
-        verify_on_serve: Whether to verify signature on startup
-        staging: Use staging Sigstore environment
-
-    Returns:
-        FastAPI application
-    """
-    # Shared state
+def create_app(
+    signed_card_path: Path,
+    verify_on_serve: bool = True,
+    staging: bool = False,
+    public_key_path: Path | None = None,
+) -> FastAPI:
     app_state = {"signed_card_data": None, "agent_card_data": None}
 
     @asynccontextmanager
@@ -53,12 +48,12 @@ def create_app(signed_card_path: Path, verify_on_serve: bool = True, staging: bo
             app_state["agent_card_data"] = MessageToDict(signed_card.agent_card)
 
             if verify_on_serve:
-                verifier = AgentCardVerifier(
-                    identity=None,
-                    oidc_issuer=None,
-                    staging=staging,
-                )
-                result = verifier.verify_signed_card(signed_card)
+                if public_key_path:
+                    verifier = ECKeyAgentCardVerifier(public_key_path=public_key_path)
+                    result = verifier.verify_signed_card(signed_card)
+                else:
+                    verifier = AgentCardVerifier(identity=None, oidc_issuer=None, staging=staging)
+                    result = verifier.verify_signed_card(signed_card)
 
                 if not result.valid:
                     raise ValueError(f"Signature verification failed: {result.errors}")
@@ -84,18 +79,14 @@ def create_app(signed_card_path: Path, verify_on_serve: bool = True, staging: bo
 
     @app.get("/.well-known/agent.json")
     async def get_agent_card():
-        """Serve the Agent Card at the well-known endpoint."""
         if app_state["agent_card_data"] is None:
             raise HTTPException(status_code=503, detail="Agent Card not loaded")
-
         return JSONResponse(content=app_state["agent_card_data"])
 
     @app.get("/.well-known/agent.signed.json")
     async def get_signed_agent_card():
-        """Serve the complete signed Agent Card with verification material."""
         if app_state["signed_card_data"] is None:
             raise HTTPException(status_code=503, detail="Signed Agent Card not loaded")
-
         return JSONResponse(content=app_state["signed_card_data"])
 
     @app.get("/health")
@@ -104,7 +95,6 @@ def create_app(signed_card_path: Path, verify_on_serve: bool = True, staging: bo
 
     @app.get("/")
     async def root():
-        """Root endpoint with API information."""
         if app_state["agent_card_data"]:
             return {
                 "message": "A2A Agent Card Server",
@@ -133,35 +123,51 @@ def create_app(signed_card_path: Path, verify_on_serve: bool = True, staging: bo
 @click.option("--host", default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)")
 @click.option("--port", default=8080, help="Port to bind to (default: 8080)")
 @click.option("--staging", is_flag=True, help="Use Sigstore staging environment for verification")
+@click.option(
+    "--public-key",
+    type=click.Path(exists=True, path_type=Path),
+    help="PEM EC public key (use EC key verification instead of Sigstore)",
+)
 @click.option("--no-verify", is_flag=True, help="Skip signature verification on startup")
 @click.option("--reload", is_flag=True, help="Enable auto-reload for development")
 @click.pass_context
 def serve_cmd(
-    ctx: click.Context, signed_card: Path, host: str, port: int, staging: bool, no_verify: bool, reload: bool
+    ctx: click.Context,
+    signed_card: Path,
+    host: str,
+    port: int,
+    staging: bool,
+    public_key: Path | None,
+    no_verify: bool,
+    reload: bool,
 ) -> None:
     """Serve a signed Agent Card at well-known endpoints.
 
-    This command starts an HTTP server that serves the Agent Card at the
-    standard A2A discovery endpoint (/.well-known/agent.json) and provides
-    the complete signed card with verification material at
-    /.well-known/agent.signed.json.
+    Verifies the signature on startup using Sigstore (default) or an EC
+    public key (--public-key).  Pass --no-verify to skip.
 
     Examples:
+
         sigstore-a2a serve signed-card.json
-        sigstore-a2a serve signed-card.json --host 0.0.0.0 --port 8080
+        sigstore-a2a serve signed-card.json --public-key pubkey.pem
         sigstore-a2a serve signed-card.json --no-verify
     """
     verbose = ctx.obj.get("verbose", False)
 
     if verbose:
         console.print(f"[blue]Starting server for: {signed_card}[/blue]")
-        console.print(f"[blue]Host: {host}[/blue]")
-        console.print(f"[blue]Port: {port}[/blue]")
         if no_verify:
             console.print("[yellow]Signature verification disabled[/yellow]")
+        elif public_key:
+            console.print(f"[blue]EC key verification: {public_key}[/blue]")
 
     try:
-        app = create_app(signed_card_path=signed_card, verify_on_serve=not no_verify, staging=staging)
+        app = create_app(
+            signed_card_path=signed_card,
+            verify_on_serve=not no_verify,
+            staging=staging,
+            public_key_path=public_key,
+        )
 
         console.print(f"[green]Starting server at http://{host}:{port}[/green]")
         console.print(f"[blue]Agent Card endpoint: http://{host}:{port}/.well-known/agent.json[/blue]")

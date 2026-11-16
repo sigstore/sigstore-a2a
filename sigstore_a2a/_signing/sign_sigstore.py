@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Sigstore keyless signing for A2A Agent Cards."""
+
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -23,9 +26,10 @@ from sigstore.models import ClientTrustConfig
 from sigstore.oidc import IdentityToken, Issuer, detect_credential
 from sigstore.sign import SigningContext
 
-from .models.provenance import SLSAProvenance
-from .models.signature import Attestations, SignedAgentCard
-from .utils.crypto import canonicalize_json
+from ..models.provenance import SLSAProvenance
+from ..models.signature import Attestations, SignedAgentCard
+from ..utils.crypto import canonicalize_json
+from .common import PREDICATE_TYPE
 
 
 class AgentCardSigner:
@@ -42,18 +46,6 @@ class AgentCardSigner:
         use_ambient_credentials: bool = False,
         verbose: bool = False,
     ):
-        """Initialize the Agent Card signer.
-
-        Args:
-            identity_token: Pre-obtained identity token
-            trust_config: Path to ClientTrustConfig JSON for manual trust configuration
-            staging: Use Sigstore staging environment
-            instance: Sigstore instance URL (for TUF-bootstrapped trust)
-            client_id: Custom OIDC client ID
-            client_secret: Custom OIDC client secret
-            use_ambient_credentials: Use ambient CI/OIDC credentials
-            verbose: Enable verbose output
-        """
         self.identity_token = identity_token
         self.staging = staging
         self.trust_config = trust_config
@@ -67,15 +59,6 @@ class AgentCardSigner:
         self._issuer: Issuer | None = None
 
     def _get_signer(self) -> tuple[SigningContext, Issuer]:
-        """
-        Retrieves or creates a Sigstore signer instance based on the configuration.
-
-        Trust options are mutually exclusive:
-          --trust_config: Use manual ClientTrustConfig JSON
-          --instance URL: Use TUF-bootstrapped trust (requires prior trust-instance)
-          --staging: Use Sigstore staging environment
-          (default): Use Sigstore production environment
-        """
         if self._signer is not None and self._issuer is not None:
             return self._signer, self._issuer
 
@@ -101,19 +84,6 @@ class AgentCardSigner:
     def sign_agent_card(
         self, agent_card: AgentCard | dict[str, Any] | str | Path, provenance_bundle: SLSAProvenance | None = None
     ) -> SignedAgentCard:
-        """Sign an A2A Agent Card.
-
-        Args:
-            agent_card: Agent card to sign (model, dict, JSON string, or file path)
-            provenance_bundle: Optional SLSA provenance bundle
-
-        Returns:
-            Signed Agent Card with verification material
-
-        Raises:
-            ValueError: If agent card is invalid
-            RuntimeError: If signing fails
-        """
         if isinstance(agent_card, str | Path):
             if Path(agent_card).exists():
                 with open(agent_card) as f:
@@ -132,42 +102,27 @@ class AgentCardSigner:
             raise ValueError(f"Invalid agent card: {e}") from e
 
         canonical_data = canonicalize_json(card_data)
-
-        # Create in-toto statement for agent card
-        import hashlib
-
-        # Calculate digest of the canonical data
         digest_hex = hashlib.sha256(canonical_data).hexdigest()
         digest_set = DigestSet(root={"sha256": digest_hex})
-
-        # Create subject for the agent card
         subject = Subject(name=parsed_card.name, digest=digest_set)
 
-        # Build the in-toto statement
         builder = StatementBuilder()
         builder = builder.subjects([subject])
-        builder = builder.predicate_type("https://a2a.openwallet.dev/agentcard/v1")
+        builder = builder.predicate_type(PREDICATE_TYPE)
         builder = builder.predicate(card_data)
-
-        # Build the statement
         statement = builder.build()
 
         signing_context, issuer = self._get_signer()
 
-        # 1) Explicitly supplied identity token
-        # 2) Ambient credential detected in the environment
-        # 3) Interactive OAuth flow
         try:
             if self.identity_token:
                 if isinstance(self.identity_token, str):
                     identity = IdentityToken(self.identity_token)
                 else:
                     identity = self.identity_token
-
             elif self.use_ambient_credentials:
                 ambient_credential = detect_credential()
                 identity = IdentityToken(ambient_credential)
-
             else:
                 identity = issuer.identity_token(
                     client_id=self.client_id or "sigstore",
@@ -181,10 +136,8 @@ class AgentCardSigner:
             raise RuntimeError(f"Failed to sign agent card: {e}") from e
 
         attestations = Attestations(signature_bundle=bundle.to_json(), provenance_bundle=provenance_bundle)
-
         signed_card = SignedAgentCard(agent_card=parsed_card, attestations=attestations)
         signed_card._raw_card_data = card_data
-
         return signed_card
 
     def sign_file(
@@ -193,26 +146,13 @@ class AgentCardSigner:
         output_path: str | Path | None = None,
         provenance_bundle: SLSAProvenance | None = None,
     ) -> Path:
-        """Sign an Agent Card file.
-
-        Args:
-            input_path: Path to Agent Card JSON file
-            output_path: Output path for signed card (default: input_path with .signed.json)
-            provenance_bundle: Optional SLSA provenance bundle
-
-        Returns:
-            Path to signed Agent Card file
-        """
         input_path = Path(input_path)
-
         if output_path is None:
             output_path = input_path.with_suffix(".signed.json")
         else:
             output_path = Path(output_path)
 
         signed_card = self.sign_agent_card(input_path, provenance_bundle)
-
         with open(output_path, "w") as f:
             json.dump(signed_card.to_dict(), f, indent=2, default=str)
-
         return output_path
