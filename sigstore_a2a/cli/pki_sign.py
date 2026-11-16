@@ -14,14 +14,13 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import click
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from .._signing.sign_ec_key import ECKeyAgentCardSigner
+from ..signing import SigningConfig
 
 console = Console()
 
@@ -56,7 +55,7 @@ def pki_sign_cmd(
             transient=True,
         ) as progress:
             progress.add_task("Initializing EC key signer...", total=None)
-            signer = ECKeyAgentCardSigner(private_key_path=private_key)
+            config = SigningConfig().use_elliptic_key_signer(private_key=private_key)
 
             provenance_bundle = None
             if provenance:
@@ -73,18 +72,11 @@ def pki_sign_cmd(
                     console.print("[green]SLSA provenance generated[/green]")
 
             progress.add_task("Signing Agent Card...", total=None)
-            signed_card = signer.sign_agent_card(agent_card, provenance_bundle=provenance_bundle)
-
             out_path = output or agent_card.with_suffix(".signed.json")
-            progress.add_task("Writing signed Agent Card...", total=None)
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(out_path, "w", encoding="utf-8", newline="\n") as f:
-                json.dump(signed_card.to_dict(), f, indent=2, ensure_ascii=False, default=str)
+            config.sign(agent_card, out_path, provenance_bundle=provenance_bundle)
 
         console.print("[green]✓[/green] Agent Card signed successfully (EC key)")
         console.print(f"[blue]Signed card written to: {out_path}[/blue]")
-        if provenance_bundle and verbose:
-            console.print("[dim]SLSA provenance included[/dim]")
 
     except click.ClickException:
         raise

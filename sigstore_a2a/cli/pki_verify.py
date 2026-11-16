@@ -19,7 +19,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
-from .._signing.verify_ec_key import ECKeyAgentCardVerifier
+from ..verifying import VerifyingConfig
 
 console = Console()
 
@@ -39,11 +39,8 @@ def pki_verify_cmd(ctx: click.Context, signed_card: Path, public_key: Path) -> N
             console=console,
             transient=True,
         ) as progress:
-            progress.add_task("Initializing EC key verifier...", total=None)
-            verifier = ECKeyAgentCardVerifier(public_key_path=public_key)
-
             progress.add_task("Verifying signature...", total=None)
-            result = verifier.verify_signed_card(signed_card)
+            result = VerifyingConfig().use_elliptic_key_verifier(public_key=public_key).verify_file(signed_card)
 
         if result.valid:
             console.print("[green]✓[/green] Agent Card signature is valid (EC key)")

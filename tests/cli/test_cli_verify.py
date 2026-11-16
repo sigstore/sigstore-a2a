@@ -67,8 +67,26 @@ class _RecordingVerifier:
         return type(self).return_result
 
 
+class _MockVerifyingConfig:
+    """Mock VerifyingConfig that wraps a _RecordingVerifier implementation."""
+
+    _impl = _RecordingVerifier
+
+    def use_sigstore_verifier(self, **kwargs):
+        _RecordingVerifier.last_init_kwargs = dict(kwargs)
+        return self
+
+    def _get_verifier(self):
+        v = object.__new__(self._impl)
+        v.return_result = self._impl.return_result
+        return v
+
+
 def _patch_verifier(monkeypatch, impl=_RecordingVerifier):
-    monkeypatch.setattr("sigstore_a2a.cli.verify.AgentCardVerifier", impl, raising=True)
+    class _Config(_MockVerifyingConfig):
+        _impl = impl
+
+    monkeypatch.setattr("sigstore_a2a.cli.verify.VerifyingConfig", lambda: _Config(), raising=True)
 
 
 def test_verify_success_minimal(runner: CliRunner, sample_signed_path: Path, monkeypatch):

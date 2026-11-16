@@ -23,10 +23,8 @@ from fastapi.responses import JSONResponse
 from google.protobuf.json_format import MessageToDict
 from rich.console import Console
 
-from .._signing.verify_certificate import CertificateAgentCardVerifier
-from .._signing.verify_ec_key import ECKeyAgentCardVerifier
-from .._signing.verify_sigstore import AgentCardVerifier
 from ..models.signature import SignedAgentCard
+from ..verifying import VerifyingConfig
 
 console = Console()
 
@@ -51,14 +49,12 @@ def create_app(
 
             if verify_on_serve:
                 if public_key_path:
-                    verifier = ECKeyAgentCardVerifier(public_key_path=public_key_path)
-                    result = verifier.verify_signed_card(signed_card)
+                    config = VerifyingConfig().use_elliptic_key_verifier(public_key=public_key_path)
                 elif cert_chain_paths:
-                    verifier = CertificateAgentCardVerifier(cert_chain_paths=cert_chain_paths)
-                    result = verifier.verify_signed_card(signed_card)
+                    config = VerifyingConfig().use_certificate_verifier(cert_chain=cert_chain_paths)
                 else:
-                    verifier = AgentCardVerifier(identity=None, oidc_issuer=None, staging=staging)
-                    result = verifier.verify_signed_card(signed_card)
+                    config = VerifyingConfig().use_sigstore_verifier(staging=staging)
+                result = config.verify(signed_card)
 
                 if not result.valid:
                     raise ValueError(f"Signature verification failed: {result.errors}")
