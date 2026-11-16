@@ -89,6 +89,72 @@ class TestVerificationResult:
         assert r.certificate is None
 
 
+class TestParseSignedCard:
+    def test_dict_input(self):
+        from sigstore_a2a._signing.common import parse_signed_card
+
+        data = {
+            "agentCard": {"name": "test", "version": "1.0", "skills": []},
+            "attestations": {"signatureBundle": {"mediaType": "test", "verificationMaterial": {}, "dsseEnvelope": {}}},
+        }
+        result = parse_signed_card(data)
+        assert result.agent_card.name == "test"
+
+    def test_invalid_type_raises(self):
+        from sigstore_a2a._signing.common import parse_signed_card
+
+        with pytest.raises(TypeError):
+            parse_signed_card(12345)
+
+    def test_file_path_input(self, tmp_path):
+        import json
+
+        from sigstore_a2a._signing.common import parse_signed_card
+
+        data = {
+            "agentCard": {"name": "file-test", "version": "1.0", "skills": []},
+            "attestations": {"signatureBundle": {"mediaType": "test", "verificationMaterial": {}, "dsseEnvelope": {}}},
+        }
+        p = tmp_path / "card.json"
+        p.write_text(json.dumps(data))
+        result = parse_signed_card(p)
+        assert result.agent_card.name == "file-test"
+
+
+class TestGetBundleDict:
+    def test_dict_passthrough(self):
+        from sigstore_a2a._signing.common import get_bundle_dict
+
+        d = {"mediaType": "test"}
+        assert get_bundle_dict(d) is d
+
+
+class TestExtractVerifiedCard:
+    def test_wrong_payload_type_raises(self):
+        from sigstore_a2a._signing.common import extract_verified_card
+
+        with pytest.raises(ValueError, match="payload type"):
+            extract_verified_card("wrong/type", b'{"_type": "x"}')
+
+    def test_wrong_statement_type_raises(self):
+        import json
+
+        from sigstore_a2a._signing.common import extract_verified_card
+
+        payload = json.dumps({"_type": "wrong", "predicate": {}}).encode()
+        with pytest.raises(ValueError, match="statement type"):
+            extract_verified_card("application/vnd.in-toto+json", payload)
+
+    def test_missing_predicate_raises(self):
+        import json
+
+        from sigstore_a2a._signing.common import extract_verified_card
+
+        payload = json.dumps({"_type": "https://in-toto.io/Statement/v1"}).encode()
+        with pytest.raises(ValueError, match="predicate"):
+            extract_verified_card("application/vnd.in-toto+json", payload)
+
+
 class TestConstants:
     def test_predicate_type(self):
         assert "a2a" in PREDICATE_TYPE

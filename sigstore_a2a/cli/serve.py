@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse
 from google.protobuf.json_format import MessageToDict
 from rich.console import Console
 
+from .._signing.verify_certificate import CertificateAgentCardVerifier
 from .._signing.verify_ec_key import ECKeyAgentCardVerifier
 from .._signing.verify_sigstore import AgentCardVerifier
 from ..models.signature import SignedAgentCard
@@ -35,6 +36,7 @@ def create_app(
     verify_on_serve: bool = True,
     staging: bool = False,
     public_key_path: Path | None = None,
+    cert_chain_paths: list[Path] | None = None,
 ) -> FastAPI:
     app_state = {"signed_card_data": None, "agent_card_data": None}
 
@@ -50,6 +52,9 @@ def create_app(
             if verify_on_serve:
                 if public_key_path:
                     verifier = ECKeyAgentCardVerifier(public_key_path=public_key_path)
+                    result = verifier.verify_signed_card(signed_card)
+                elif cert_chain_paths:
+                    verifier = CertificateAgentCardVerifier(cert_chain_paths=cert_chain_paths)
                     result = verifier.verify_signed_card(signed_card)
                 else:
                     verifier = AgentCardVerifier(identity=None, oidc_issuer=None, staging=staging)
@@ -126,7 +131,13 @@ def create_app(
 @click.option(
     "--public-key",
     type=click.Path(exists=True, path_type=Path),
-    help="PEM EC public key (use EC key verification instead of Sigstore)",
+    help="PEM EC public key (EC key verification)",
+)
+@click.option(
+    "--cert-chain",
+    multiple=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="PEM certificate(s) for chain-of-trust verification (repeatable).",
 )
 @click.option("--no-verify", is_flag=True, help="Skip signature verification on startup")
 @click.option("--reload", is_flag=True, help="Enable auto-reload for development")
@@ -138,18 +149,20 @@ def serve_cmd(
     port: int,
     staging: bool,
     public_key: Path | None,
+    cert_chain: tuple[Path, ...],
     no_verify: bool,
     reload: bool,
 ) -> None:
     """Serve a signed Agent Card at well-known endpoints.
 
-    Verifies the signature on startup using Sigstore (default) or an EC
-    public key (--public-key).  Pass --no-verify to skip.
+    Verifies on startup with Sigstore (default), --public-key (EC key),
+    or --cert-chain (certificate).  Pass --no-verify to skip.
 
     Examples:
 
         sigstore-a2a serve signed-card.json
         sigstore-a2a serve signed-card.json --public-key pubkey.pem
+        sigstore-a2a serve signed-card.json --cert-chain ca.pem
         sigstore-a2a serve signed-card.json --no-verify
     """
     verbose = ctx.obj.get("verbose", False)
@@ -167,6 +180,7 @@ def serve_cmd(
             verify_on_serve=not no_verify,
             staging=staging,
             public_key_path=public_key,
+            cert_chain_paths=list(cert_chain) if cert_chain else None,
         )
 
         console.print(f"[green]Starting server at http://{host}:{port}[/green]")

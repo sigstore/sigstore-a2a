@@ -185,6 +185,224 @@ class TestVerifyKey:
         assert "public-key" in result.output.lower() or "required" in result.output.lower()
 
 
+def _make_cert_fixtures(tmp_path: Path):
+    """Generate a key + self-signed code-signing cert for CLI certificate tests."""
+    import datetime
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.x509 import oid
+
+    key_path, _ = generate_ec_keypair(tmp_path / "certkeys")
+    private_key = serialization.load_pem_private_key(key_path.read_bytes(), password=None)
+
+    subject = x509.Name([x509.NameAttribute(oid.NameOID.COMMON_NAME, "CLI Test")])
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(subject)
+        .public_key(private_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime.now(datetime.UTC) - datetime.timedelta(hours=1))
+        .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                key_encipherment=False,
+                content_commitment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
+        .add_extension(x509.ExtendedKeyUsage([oid.ExtendedKeyUsageOID.CODE_SIGNING]), critical=False)
+        .sign(private_key, hashes.SHA256())
+    )
+    cert_path = tmp_path / "cert.pem"
+    cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    return key_path, cert_path
+
+
+class TestSignCertificate:
+    def test_sign_certificate_produces_output(self, runner, tmp_path):
+        card_path = tmp_path / "card.json"
+        card_path.write_text(json.dumps(SAMPLE_AGENT_CARD))
+        key_path, cert_path = _make_cert_fixtures(tmp_path)
+        out = tmp_path / "signed.json"
+
+        result = runner.invoke(
+            cli,
+            [
+                "sign",
+                "certificate",
+                str(card_path),
+                "--private-key",
+                str(key_path),
+                "--signing-cert",
+                str(cert_path),
+                "--cert-chain",
+                str(cert_path),
+                "-o",
+                str(out),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        data = json.loads(out.read_text())
+        assert "x509CertificateChain" in data["attestations"]["signatureBundle"]["verificationMaterial"]
+
+    def test_sign_certificate_with_provenance(self, runner, tmp_path):
+        card_path = tmp_path / "card.json"
+        card_path.write_text(json.dumps(SAMPLE_AGENT_CARD))
+        key_path, cert_path = _make_cert_fixtures(tmp_path)
+        out = tmp_path / "signed-prov.json"
+
+        result = runner.invoke(
+            cli,
+            [
+                "sign",
+                "certificate",
+                str(card_path),
+                "--private-key",
+                str(key_path),
+                "--signing-cert",
+                str(cert_path),
+                "--cert-chain",
+                str(cert_path),
+                "-o",
+                str(out),
+                "--provenance",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        data = json.loads(out.read_text())
+        assert "provenanceBundle" in data["attestations"]
+
+    def test_sign_certificate_missing_cert_errors(self, runner, keypair, tmp_path):
+        card_path = tmp_path / "card.json"
+        card_path.write_text(json.dumps(SAMPLE_AGENT_CARD))
+        key_path, _ = keypair
+
+        result = runner.invoke(
+            cli,
+            ["sign", "certificate", str(card_path), "--private-key", str(key_path)],
+        )
+
+        assert result.exit_code != 0
+
+
+class TestVerifyCertificate:
+    def test_verify_certificate_success(self, runner, tmp_path):
+        card_path = tmp_path / "card.json"
+        card_path.write_text(json.dumps(SAMPLE_AGENT_CARD))
+        key_path, cert_path = _make_cert_fixtures(tmp_path)
+        out = tmp_path / "signed.json"
+
+        runner.invoke(
+            cli,
+            [
+                "sign",
+                "certificate",
+                str(card_path),
+                "--private-key",
+                str(key_path),
+                "--signing-cert",
+                str(cert_path),
+                "--cert-chain",
+                str(cert_path),
+                "-o",
+                str(out),
+            ],
+        )
+
+        result = runner.invoke(cli, ["verify", "certificate", str(out), "--cert-chain", str(cert_path)])
+
+        assert result.exit_code == 0, result.output
+        assert "valid" in result.output.lower()
+
+    def test_verify_certificate_with_san_uri(self, runner, tmp_path):
+        import datetime
+
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.x509 import oid
+
+        card_path = tmp_path / "card.json"
+        card_path.write_text(json.dumps(SAMPLE_AGENT_CARD))
+        key_path, _ = generate_ec_keypair(tmp_path / "sankeys")
+        private_key = serialization.load_pem_private_key(key_path.read_bytes(), password=None)
+
+        subject = x509.Name([x509.NameAttribute(oid.NameOID.COMMON_NAME, "SAN Test")])
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(subject)
+            .public_key(private_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.datetime.now(datetime.UTC) - datetime.timedelta(hours=1))
+            .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
+            .add_extension(
+                x509.KeyUsage(
+                    digital_signature=True,
+                    key_encipherment=False,
+                    content_commitment=False,
+                    data_encipherment=False,
+                    key_agreement=False,
+                    key_cert_sign=False,
+                    crl_sign=False,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                critical=True,
+            )
+            .add_extension(x509.ExtendedKeyUsage([oid.ExtendedKeyUsageOID.CODE_SIGNING]), critical=False)
+            .add_extension(
+                x509.SubjectAlternativeName([x509.UniformResourceIdentifier("spiffe://example.com/agent")]),
+                critical=False,
+            )
+            .sign(private_key, hashes.SHA256())
+        )
+        cert_path = tmp_path / "san_cert.pem"
+        cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+
+        out = tmp_path / "signed-san.json"
+        runner.invoke(
+            cli,
+            [
+                "sign",
+                "certificate",
+                str(card_path),
+                "--private-key",
+                str(key_path),
+                "--signing-cert",
+                str(cert_path),
+                "--cert-chain",
+                str(cert_path),
+                "-o",
+                str(out),
+            ],
+        )
+
+        result = runner.invoke(
+            cli,
+            [
+                "verify",
+                "certificate",
+                str(out),
+                "--cert-chain",
+                str(cert_path),
+                "--san-uri",
+                "spiffe://example.com/agent",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+
+
 class TestDefaultSubcommand:
     def test_sign_without_subcommand_defaults_to_sigstore(self, runner, card_path):
         result = runner.invoke(cli, ["sign", str(card_path), "--identity_token", "fake"])

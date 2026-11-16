@@ -14,12 +14,18 @@
 
 """Shared constants and helpers for signing and verification."""
 
+import json
+from pathlib import Path
 from typing import Any
 
 from a2a.types import AgentCard
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
+from google.protobuf.json_format import ParseDict
+from sigstore.models import Bundle
+
+from ..models.signature import SignedAgentCard
 
 # In-toto / DSSE constants
 IN_TOTO_JSON_PAYLOAD_TYPE: str = "application/vnd.in-toto+json"
@@ -87,3 +93,43 @@ class VerificationResult:
 
     def __bool__(self) -> bool:
         return self.valid
+
+
+def parse_signed_card(signed_card: SignedAgentCard | dict | str | Path) -> SignedAgentCard:
+    """Parse input into a validated SignedAgentCard."""
+    if isinstance(signed_card, SignedAgentCard):
+        return signed_card
+    if isinstance(signed_card, Path):
+        card_data = json.loads(signed_card.read_text())
+    elif isinstance(signed_card, str):
+        path = Path(signed_card)
+        try:
+            is_file = path.exists()
+        except OSError:
+            is_file = False
+        card_data = json.loads(path.read_text()) if is_file else json.loads(signed_card)
+    elif isinstance(signed_card, dict):
+        card_data = signed_card
+    else:
+        raise TypeError(f"Invalid signed card type: {type(signed_card)}")
+    return SignedAgentCard.model_validate(card_data)
+
+
+def get_bundle_dict(sig_bundle: Bundle | dict) -> dict:
+    """Convert a signature bundle (Bundle or dict) to a plain dict."""
+    if isinstance(sig_bundle, Bundle):
+        return json.loads(sig_bundle.to_json())
+    return sig_bundle
+
+
+def extract_verified_card(payload_type: str, payload: bytes) -> tuple[AgentCard, dict]:
+    """Extract the agent card from a verified DSSE payload."""
+    if payload_type != IN_TOTO_JSON_PAYLOAD_TYPE:
+        raise ValueError(f"Expected DSSE payload type {IN_TOTO_JSON_PAYLOAD_TYPE}, got {payload_type}")
+    statement = json.loads(payload)
+    if statement.get("_type") != IN_TOTO_STATEMENT_TYPE:
+        raise ValueError(f"Expected in-toto statement type {IN_TOTO_STATEMENT_TYPE}, got {statement.get('_type')}")
+    predicate = statement.get("predicate")
+    if predicate is None or not isinstance(predicate, dict):
+        raise ValueError("DSSE statement does not contain a valid predicate")
+    return ParseDict(predicate, AgentCard(), ignore_unknown_fields=True), predicate

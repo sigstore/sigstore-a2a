@@ -39,6 +39,8 @@ dependencies = [
     "fastapi>=0.100.0",
     "uvicorn>=0.23.0",
     "cryptography>=41.0.0",
+    "pyOpenSSL>=23.0.0",
+    "certifi",
     "rich>=13.0.0",
 ]
 keywords = [

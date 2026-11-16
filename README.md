@@ -3,15 +3,16 @@
 > ⚠️ **Warning:** Prototype code - not for production use. Code is not reviewed and has not undergone a security audit.
 
 A Python library and CLI tool for signing and verifying A2A (Agent-to-Agent) AgentCards using
-[Sigstore](https://sigstore.dev/) keyless signing or traditional EC key signing, with optional
-[SLSA](https://slsa.dev/) provenance attestations.
+[Sigstore](https://sigstore.dev/) keyless signing, EC key signing, or X.509 certificate signing,
+with optional [SLSA](https://slsa.dev/) provenance attestations.
 
 ## Overview
 
 This library enables verifiable supply chain security for A2A agents by providing:
 
 - **Sigstore keyless signing** of A2A Agent Cards using Sigstore's infrastructure (default)
-- **EC key signing** using traditional elliptic curve private keys (secp256r1, secp384r1, secp521r1)
+- **EC key signing** using elliptic curve private keys (secp256r1, secp384r1, secp521r1)
+- **Certificate signing** using X.509 certificates with chain-of-trust validation
 - **SLSA provenance generation** to link Agent Cards to their source repositories and build workflows
 - **Identity verification** to establish trust in agent origins
 - **Discovery integration** for serving signed Agent Cards at well-known endpoints
@@ -54,6 +55,29 @@ sigstore-a2a verify key agent-card.signed.json --public-key public.pem
 sigstore-a2a sign key agent-card.json --private-key private.pem --provenance
 ```
 
+### Signing with a Certificate
+
+For enterprise environments using X.509 PKI:
+
+```bash
+# Generate a self-signed code-signing certificate
+openssl req -x509 -new -key private.pem -out cert.pem -days 365 \
+  -subj "/CN=My Agent Signer" \
+  -addext "keyUsage=digitalSignature" \
+  -addext "extendedKeyUsage=codeSigning"
+
+# Sign with certificate
+sigstore-a2a sign certificate agent-card.json \
+  --private-key private.pem --signing-cert cert.pem --cert-chain cert.pem
+
+# Verify with certificate chain
+sigstore-a2a verify certificate agent-card.signed.json --cert-chain cert.pem
+
+# Verify with SAN identity pinning
+sigstore-a2a verify certificate agent-card.signed.json \
+  --cert-chain cert.pem --san-uri spiffe://example.com/agent
+```
+
 ### Signing with Sigstore (Keyless)
 
 In CI/CD environments with OIDC credentials, Sigstore keyless signing is the default:
@@ -85,6 +109,19 @@ if result.valid:
     print(f"Verified: {result.agent_card.name}")
 else:
     print(f"Failed: {result.errors}")
+
+# --- Certificate signing ---
+from sigstore_a2a import CertificateAgentCardSigner, CertificateAgentCardVerifier
+
+signer = CertificateAgentCardSigner(
+    private_key_path=Path("private.pem"),
+    signing_cert_path=Path("cert.pem"),
+    cert_chain_paths=[Path("ca.pem")],
+)
+signed = signer.sign_agent_card("agent-card.json")
+
+verifier = CertificateAgentCardVerifier(cert_chain_paths=[Path("ca.pem")])
+result = verifier.verify_signed_card(signed)
 
 # --- Sigstore keyless signing ---
 from sigstore_a2a import AgentCardSigner, AgentCardVerifier
@@ -121,6 +158,17 @@ sigstore-a2a sign key agent-card.json --private-key key.pem \
   --provenance --repository owner/repo --commit_sha abc123
 ```
 
+### sign certificate
+
+Sign using an X.509 certificate and trust chain:
+
+```bash
+sigstore-a2a sign certificate agent-card.json \
+  --private-key key.pem --signing-cert cert.pem --cert-chain ca.pem
+sigstore-a2a sign certificate agent-card.json \
+  --private-key key.pem --signing-cert cert.pem --cert-chain ca.pem --provenance
+```
+
 ### sign sigstore
 
 Sign using Sigstore keyless signing (default when no method is given):
@@ -143,6 +191,16 @@ Verify using an EC public key:
 
 ```bash
 sigstore-a2a verify key signed-card.json --public-key pubkey.pem
+```
+
+### verify certificate
+
+Verify using a certificate chain:
+
+```bash
+sigstore-a2a verify certificate signed-card.json --cert-chain ca.pem
+sigstore-a2a verify certificate signed-card.json \
+  --cert-chain ca.pem --san-uri spiffe://example.com/agent
 ```
 
 ### verify sigstore
@@ -177,6 +235,9 @@ sigstore-a2a serve signed-card.json --port 8080
 
 # Serve with EC key verification on startup
 sigstore-a2a serve signed-card.json --public-key pubkey.pem
+
+# Serve with certificate chain verification on startup
+sigstore-a2a serve signed-card.json --cert-chain ca.pem
 
 # Serve without verification
 sigstore-a2a serve signed-card.json --no-verify
@@ -214,7 +275,7 @@ Signed Agent Cards wrap the original card with cryptographic attestations:
 }
 ```
 
-The `signatureBundle` uses the Sigstore bundle format for both Sigstore keyless and EC key signatures.
+The `signatureBundle` uses the Sigstore bundle format for all signing methods (Sigstore keyless, EC key, and certificate).
 
 ## GitHub Actions Integration
 
@@ -244,7 +305,7 @@ jobs:
 
       - name: Sign Agent Card
         run: |
-          sigstore-a2a sign agent-card.json \
+          sigstore-a2a sign sigstore agent-card.json \
             --use_ambient_credentials \
             --provenance \
             --repository ${{ github.repository }} \
@@ -253,7 +314,7 @@ jobs:
 
       - name: Verify signature
         run: |
-          sigstore-a2a verify signed-agent-card.json \
+          sigstore-a2a verify sigstore signed-agent-card.json \
             --identity "https://github.com/${{ github.repository }}/.github/workflows/${{ github.workflow }}.yml@refs/heads/main" \
             --identity_provider https://token.actions.githubusercontent.com \
             --repository ${{ github.repository }}
@@ -286,6 +347,31 @@ class ECKeyAgentCardVerifier:
     def verify_file(self, file_path) -> VerificationResult
 ```
 
+### CertificateAgentCardSigner
+
+```python
+class CertificateAgentCardSigner(ECKeyAgentCardSigner):
+    def __init__(self, private_key_path: Path, signing_cert_path: Path,
+                 cert_chain_paths: Iterable[Path] = (), password: bytes | None = None)
+    def sign_agent_card(self, agent_card, provenance_bundle=None) -> SignedAgentCard
+    def sign_file(self, input_path, output_path=None, provenance_bundle=None) -> Path
+```
+
+Validates certificate expiry, key-cert match. Embeds X.509 certificate chain in the bundle.
+
+### CertificateAgentCardVerifier
+
+```python
+class CertificateAgentCardVerifier:
+    def __init__(self, cert_chain_paths: Iterable[Path] = (),
+                 expected_san_uris: Iterable[str] = ())
+    def verify_signed_card(self, signed_card) -> VerificationResult
+    def verify_file(self, file_path) -> VerificationResult
+```
+
+Validates certificate chain (via pyOpenSSL), checks KeyUsage/ExtendedKeyUsage for code signing,
+and optionally pins SAN URIs (e.g. SPIFFE IDs). Defaults to OS root CAs when no chain is provided.
+
 ### AgentCardSigner
 
 ```python
@@ -312,7 +398,7 @@ class AgentCardVerifier:
 - `valid`: Whether verification succeeded
 - `agent_card`: Verified AgentCard (extracted from the authenticated DSSE payload)
 - `raw_card_data`: Raw predicate dict, preserving fields that may not map to the current protobuf schema
-- `certificate`: Signing certificate (Sigstore only)
+- `certificate`: Signing certificate (Sigstore and certificate methods)
 - `identity`: Extracted identity information (Sigstore only)
 - `errors`: List of verification errors
 
@@ -339,6 +425,14 @@ In CI/CD environments, ensure:
 - Key must be an elliptic curve key (RSA and other types are rejected)
 - Supported curves: secp256r1 (P-256), secp384r1 (P-384), secp521r1 (P-521)
 - Key format: PEM encoded
+
+### Certificate Issues
+
+- Certificate must have `digitalSignature` in KeyUsage
+- Certificate must have `codeSigning` in ExtendedKeyUsage (TLS-only certificates are rejected)
+- Certificate must not be expired or not-yet-valid
+- Certificate public key must match the private key
+- Certificate format: PEM encoded
 
 ## License
 
