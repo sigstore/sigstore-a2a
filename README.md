@@ -443,6 +443,47 @@ class ProvenanceBuilder:
                          workflow_ref=None) -> SLSAProvenance
 ```
 
+## OpenTelemetry Tracing
+
+Optional OpenTelemetry support enables distributed tracing for all sign and verify operations.
+
+### Installation
+
+```bash
+pip install sigstore-a2a[otel]
+```
+
+### Usage
+
+When installed with the `[otel]` extra, tracing is automatically enabled. Configure the
+exporter via standard OpenTelemetry environment variables:
+
+```bash
+export OTEL_SERVICE_NAME="sigstore-a2a"
+export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4318"
+export OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"
+
+sigstore-a2a sign key agent-card.json --private-key key.pem
+sigstore-a2a verify key signed.json --public-key pub.pem
+```
+
+Each sign and verify CLI command creates a span with attributes like `signing.method`,
+`signing.agent_card`, `verification.method`, and `verification.signed_card`.
+
+Without the `[otel]` extra, tracing is silently disabled with zero overhead.
+
+### Testing with Jaeger
+
+```bash
+# Start Jaeger
+docker run --rm -d --name jaeger -p 16686:16686 -p 4318:4318 jaegertracing/all-in-one:latest
+
+# Run the OTel integration test
+./scripts/tests/test-otel.sh
+
+# View traces at http://localhost:16686
+```
+
 ## Troubleshooting
 
 ### OIDC Token Issues (Sigstore)

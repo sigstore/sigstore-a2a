@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import logging
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -23,6 +25,24 @@ from rich.console import Console
 import sigstore_a2a
 
 console = Console()
+
+
+class _NoOpTracer:
+    """Fallback tracer when OpenTelemetry is not installed."""
+
+    def start_as_current_span(self, name):
+        @contextlib.contextmanager
+        def noop_context():
+            class _NoOpSpan:
+                def set_attribute(self, key, value):
+                    pass
+
+            yield _NoOpSpan()
+
+        return noop_context()
+
+
+tracer = _NoOpTracer()
 
 
 # ---------------------------------------------------------------------------
@@ -123,8 +143,22 @@ _reload = click.option("--reload", is_flag=True, help="Enable auto-reload for de
 @click.pass_context
 def cli(ctx: click.Context, verbose: bool) -> None:
     """sigstore-a2a command line."""
+    global tracer
+
     ctx.ensure_object(dict)
     ctx.obj["verbose"] = verbose
+
+    try:
+        from opentelemetry import trace
+        from opentelemetry.instrumentation import auto_instrumentation
+
+        auto_instrumentation.initialize()
+        tracer = trace.get_tracer(__name__)
+        logging.debug("OpenTelemetry tracing enabled")
+    except ImportError:
+        logging.debug("OpenTelemetry not installed, tracing disabled")
+    except Exception as e:
+        logging.warning("Failed to initialize OpenTelemetry: %s", e)
 
 
 # ===================================================================
@@ -163,12 +197,16 @@ def _sign_sigstore(ctx: click.Context, **kwargs):
       sigstore-a2a sign agent-card.json
       sigstore-a2a sign sigstore agent-card.json --staging
     """
-    try:
-        from .sign import sign_cmd
+    with tracer.start_as_current_span("Sign") as span:
+        span.set_attribute("signing.method", "sigstore")
+        span.set_attribute("signing.agent_card", str(kwargs.get("agent_card", "")))
+        span.set_attribute("signing.staging", kwargs.get("staging", False))
+        try:
+            from .sign import sign_cmd
 
-        return ctx.invoke(sign_cmd, **kwargs)
-    except ImportError as e:
-        console.print(f"[red]Error:[/red] Failed to import signing dependencies: {e}")
+            return ctx.invoke(sign_cmd, **kwargs)
+        except ImportError as e:
+            console.print(f"[red]Error:[/red] Failed to import signing dependencies: {e}")
 
 
 @_sign.command(name="key")
@@ -197,22 +235,26 @@ def _sign_key(
       sigstore-a2a sign key agent-card.json --private-key key.pem
       sigstore-a2a sign key agent-card.json --private-key key.pem --provenance
     """
-    try:
-        from .pki_sign import pki_sign_cmd
+    with tracer.start_as_current_span("Sign") as span:
+        span.set_attribute("signing.method", "key")
+        span.set_attribute("signing.agent_card", str(agent_card))
+        span.set_attribute("signing.provenance", provenance)
+        try:
+            from .pki_sign import pki_sign_cmd
 
-        return ctx.invoke(
-            pki_sign_cmd,
-            agent_card=agent_card,
-            private_key=private_key,
-            output=output,
-            provenance=provenance,
-            repository=repository,
-            commit_sha=commit_sha,
-            workflow_ref=workflow_ref,
-        )
-    except ImportError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise click.ClickException("EC key signing unavailable") from e
+            return ctx.invoke(
+                pki_sign_cmd,
+                agent_card=agent_card,
+                private_key=private_key,
+                output=output,
+                provenance=provenance,
+                repository=repository,
+                commit_sha=commit_sha,
+                workflow_ref=workflow_ref,
+            )
+        except ImportError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise click.ClickException("EC key signing unavailable") from e
 
 
 @_sign.command(name="certificate")
@@ -252,42 +294,46 @@ def _sign_certificate(
       sigstore-a2a sign certificate agent-card.json \\
         --private-key key.pem --signing-cert cert.pem --cert-chain ca.pem
     """
-    try:
-        from ..provenance import ProvenanceBuilder
-        from ..signing import SigningConfig
+    with tracer.start_as_current_span("Sign") as span:
+        span.set_attribute("signing.method", "certificate")
+        span.set_attribute("signing.agent_card", str(agent_card))
+        span.set_attribute("signing.provenance", provenance)
+        try:
+            from ..provenance import ProvenanceBuilder
+            from ..signing import SigningConfig
 
-        verbose = ctx.obj.get("verbose", False)
-        config = SigningConfig().use_certificate_signer(
-            private_key=private_key,
-            signing_cert=signing_cert,
-            cert_chain=list(cert_chain),
-        )
-
-        provenance_bundle = None
-        if provenance:
-            provenance_bundle = ProvenanceBuilder().build_provenance(
-                agent_card=agent_card,
-                source_repo=repository,
-                commit_sha=commit_sha,
-                workflow_ref=workflow_ref,
+            verbose = ctx.obj.get("verbose", False)
+            config = SigningConfig().use_certificate_signer(
+                private_key=private_key,
+                signing_cert=signing_cert,
+                cert_chain=list(cert_chain),
             )
+
+            provenance_bundle = None
+            if provenance:
+                provenance_bundle = ProvenanceBuilder().build_provenance(
+                    agent_card=agent_card,
+                    source_repo=repository,
+                    commit_sha=commit_sha,
+                    workflow_ref=workflow_ref,
+                )
+                if verbose:
+                    console.print("[green]SLSA provenance generated[/green]")
+
+            out_path = output or agent_card.with_suffix(".signed.json")
+            config.sign(agent_card, out_path, provenance_bundle=provenance_bundle)
+
+            console.print("[green]✓[/green] Agent Card signed successfully (certificate)")
+            console.print(f"[blue]Signed card written to: {out_path}[/blue]")
+            if provenance_bundle and verbose:
+                console.print("[dim]SLSA provenance included[/dim]")
+        except click.ClickException:
+            raise
+        except Exception as e:
+            console.print(f"[red]✗[/red] Failed to sign Agent Card: {e}")
             if verbose:
-                console.print("[green]SLSA provenance generated[/green]")
-
-        out_path = output or agent_card.with_suffix(".signed.json")
-        config.sign(agent_card, out_path, provenance_bundle=provenance_bundle)
-
-        console.print("[green]✓[/green] Agent Card signed successfully (certificate)")
-        console.print(f"[blue]Signed card written to: {out_path}[/blue]")
-        if provenance_bundle and verbose:
-            console.print("[dim]SLSA provenance included[/dim]")
-    except click.ClickException:
-        raise
-    except Exception as e:
-        console.print(f"[red]✗[/red] Failed to sign Agent Card: {e}")
-        if verbose:
-            console.print_exception()
-        raise click.ClickException(str(e)) from e
+                console.print_exception()
+            raise click.ClickException(str(e)) from e
 
 
 # ===================================================================
@@ -322,13 +368,17 @@ def _verify_sigstore(ctx: click.Context, **kwargs):
         --identity dev@example.com \\
         --identity_provider https://accounts.google.com
     """
-    try:
-        from .verify import verify_cmd
+    with tracer.start_as_current_span("Verify") as span:
+        span.set_attribute("verification.method", "sigstore")
+        span.set_attribute("verification.signed_card", str(kwargs.get("signed_card", "")))
+        span.set_attribute("verification.staging", kwargs.get("staging", False))
+        try:
+            from .verify import verify_cmd
 
-        return ctx.invoke(verify_cmd, **kwargs)
-    except ImportError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise click.ClickException("Verification unavailable") from e
+            return ctx.invoke(verify_cmd, **kwargs)
+        except ImportError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise click.ClickException("Verification unavailable") from e
 
 
 @_verify.command(name="key")
@@ -342,13 +392,16 @@ def _verify_key(ctx: click.Context, signed_card: Path, public_key: Path):
 
       sigstore-a2a verify key signed-card.json --public-key pubkey.pem
     """
-    try:
-        from .pki_verify import pki_verify_cmd
+    with tracer.start_as_current_span("Verify") as span:
+        span.set_attribute("verification.method", "key")
+        span.set_attribute("verification.signed_card", str(signed_card))
+        try:
+            from .pki_verify import pki_verify_cmd
 
-        return ctx.invoke(pki_verify_cmd, signed_card=signed_card, public_key=public_key)
-    except ImportError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise click.ClickException("EC key verification unavailable") from e
+            return ctx.invoke(pki_verify_cmd, signed_card=signed_card, public_key=public_key)
+        except ImportError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise click.ClickException("EC key verification unavailable") from e
 
 
 @_verify.command(name="certificate")
@@ -375,43 +428,46 @@ def _verify_certificate(
       sigstore-a2a verify certificate signed-card.json \\
         --cert-chain ca.pem --san-uri spiffe://example.com/agent
     """
-    try:
-        from ..verifying import VerifyingConfig
+    with tracer.start_as_current_span("Verify") as span:
+        span.set_attribute("verification.method", "certificate")
+        span.set_attribute("verification.signed_card", str(signed_card))
+        try:
+            from ..verifying import VerifyingConfig
 
-        result = (
-            VerifyingConfig()
-            .use_certificate_verifier(cert_chain=list(cert_chain), expected_san_uris=list(san_uri))
-            .verify_file(signed_card)
-        )
+            result = (
+                VerifyingConfig()
+                .use_certificate_verifier(cert_chain=list(cert_chain), expected_san_uris=list(san_uri))
+                .verify_file(signed_card)
+            )
 
-        if result.valid:
-            console.print("[green]✓[/green] Agent Card signature is valid (certificate)")
-            if result.agent_card:
-                from rich.table import Table
+            if result.valid:
+                console.print("[green]✓[/green] Agent Card signature is valid (certificate)")
+                if result.agent_card:
+                    from rich.table import Table
 
-                table = Table(title="Agent Card Details")
-                table.add_column("Field", style="cyan")
-                table.add_column("Value", style="white")
-                table.add_row("Name", result.agent_card.name)
-                table.add_row("Version", result.agent_card.version)
-                console.print(table)
-            if result.certificate:
-                verbose = ctx.obj.get("verbose", False)
-                if verbose:
-                    console.print(f"[dim]Certificate subject: {result.certificate.subject.rfc4514_string()}[/dim]")
-        else:
-            console.print("[red]✗[/red] Agent Card signature verification failed")
-            for error in result.errors:
-                console.print(f"[red]Error:[/red] {error}")
-            raise click.ClickException("Signature verification failed")
-    except click.ClickException:
-        raise
-    except Exception as e:
-        verbose = ctx.obj.get("verbose", False)
-        console.print(f"[red]✗[/red] Failed to verify Agent Card: {e}")
-        if verbose:
-            console.print_exception()
-        raise click.ClickException(str(e)) from e
+                    table = Table(title="Agent Card Details")
+                    table.add_column("Field", style="cyan")
+                    table.add_column("Value", style="white")
+                    table.add_row("Name", result.agent_card.name)
+                    table.add_row("Version", result.agent_card.version)
+                    console.print(table)
+                if result.certificate:
+                    verbose = ctx.obj.get("verbose", False)
+                    if verbose:
+                        console.print(f"[dim]Certificate subject: {result.certificate.subject.rfc4514_string()}[/dim]")
+            else:
+                console.print("[red]✗[/red] Agent Card signature verification failed")
+                for error in result.errors:
+                    console.print(f"[red]Error:[/red] {error}")
+                raise click.ClickException("Signature verification failed")
+        except click.ClickException:
+            raise
+        except Exception as e:
+            verbose = ctx.obj.get("verbose", False)
+            console.print(f"[red]✗[/red] Failed to verify Agent Card: {e}")
+            if verbose:
+                console.print_exception()
+            raise click.ClickException(str(e)) from e
 
 
 # ===================================================================
