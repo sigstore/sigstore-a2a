@@ -55,6 +55,7 @@ class CertificateAgentCardVerifier:
         cert_bytes = b"".join(p.read_bytes() for p in cert_paths)
         self._trusted_certificates = x509.load_pem_x509_certificates(cert_bytes)
         self._expected_san_uris = frozenset(expected_san_uris)
+        logger.debug("Certificate verifier initialized, trusted_certs=%d", len(self._trusted_certificates))
 
     def _verify_certificate_chain(self, bundle: bundle_pb.Bundle) -> ec.EllipticCurvePublicKey:
         """Validate the certificate chain and return the leaf cert's public key."""
@@ -76,6 +77,7 @@ class CertificateAgentCardVerifier:
 
         store_ctx = crypto.X509StoreContext(store, signing_cert_ssl, chain_ssl)
         store_ctx.verify_certificate()
+        logger.debug("Certificate chain validated, subject=%s", signing_cert.subject.rfc4514_string())
 
         self._check_key_usage(signing_cert)
         self._verify_san_identity(signing_cert)
@@ -136,9 +138,11 @@ class CertificateAgentCardVerifier:
         self,
         signed_card: SignedAgentCard | dict[str, Any] | str | Path,
     ) -> VerificationResult:
+        logger.info("Verifying agent card with certificate chain")
         try:
             parsed = parse_signed_card(signed_card)
         except Exception as e:
+            logger.error("Invalid signed card: %s", e)
             return VerificationResult(valid=False, errors=[f"Invalid signed card: {e}"])
 
         bundle_dict = get_bundle_dict(parsed.attestations.signature_bundle)
@@ -160,6 +164,7 @@ class CertificateAgentCardVerifier:
             SigstoreA2AError,
             ValueError,
         ) as e:
+            logger.error("Certificate verification failed: %s", e)
             return VerificationResult(valid=False, errors=[f"Signature verification failed: {e}"])
 
         try:
@@ -170,6 +175,7 @@ class CertificateAgentCardVerifier:
         signing_chain = bundle.verification_material.x509_certificate_chain
         cert = x509.load_der_x509_certificate(signing_chain.certificates[0].raw_bytes)
 
+        logger.info("Agent card verified successfully (certificate, subject=%s)", cert.subject.rfc4514_string())
         return VerificationResult(
             valid=True,
             agent_card=verified_card,

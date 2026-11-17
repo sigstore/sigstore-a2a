@@ -17,6 +17,7 @@
 import base64
 import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +44,8 @@ from .common import (
     pae,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class ECKeyAgentCardSigner:
     """Signs A2A Agent Cards using an elliptic curve private key."""
@@ -53,6 +56,7 @@ class ECKeyAgentCardSigner:
             raise InvalidKeyError("Only elliptic curve private keys are supported")
         self._private_key: ec.EllipticCurvePrivateKey = loaded_key
         check_ec_key(self._private_key.public_key())
+        logger.debug("EC key signer initialized, curve=%s", self._private_key.public_key().curve.name)
 
     def _build_statement(self, card_data: dict, card_name: str) -> bytes:
         canonical_data = canonicalize_json(card_data)
@@ -103,6 +107,7 @@ class ECKeyAgentCardSigner:
             raise InvalidAgentCardError(f"Invalid agent card type: {type(agent_card)}")
 
         parsed_card = ParseDict(card_data, AgentCard(), ignore_unknown_fields=True)
+        logger.info("Signing agent card '%s' with EC key", parsed_card.name)
         raw_payload = self._build_statement(card_data, parsed_card.name)
 
         public_key = self._private_key.public_key()
@@ -130,6 +135,7 @@ class ECKeyAgentCardSigner:
 
         signed_card = SignedAgentCard(agent_card=parsed_card, attestations=attestations)
         signed_card._raw_card_data = card_data
+        logger.info("Agent card '%s' signed successfully", parsed_card.name)
         return signed_card
 
     def sign_file(

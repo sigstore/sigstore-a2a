@@ -16,6 +16,7 @@
 
 import base64
 import datetime
+import logging
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -26,6 +27,8 @@ from sigstore_models.common import v1 as common_pb
 
 from ..exceptions import InvalidCertificateError
 from .sign_ec_key import ECKeyAgentCardSigner
+
+logger = logging.getLogger(__name__)
 
 
 class CertificateAgentCardSigner(ECKeyAgentCardSigner):
@@ -55,6 +58,11 @@ class CertificateAgentCardSigner(ECKeyAgentCardSigner):
 
         chain_bytes = b"".join(p.read_bytes() for p in cert_chain_paths)
         self._trust_chain = x509.load_pem_x509_certificates(chain_bytes) if chain_bytes else []
+        logger.debug(
+            "Certificate signer initialized, subject=%s, chain_length=%d",
+            self._signing_cert.subject.rfc4514_string(),
+            len(self._trust_chain) + 1,
+        )
 
     def _get_verification_material(self) -> bundle_pb.VerificationMaterial:
         def _to_pb_cert(cert: x509.Certificate) -> common_pb.X509Certificate:

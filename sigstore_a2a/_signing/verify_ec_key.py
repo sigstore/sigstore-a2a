@@ -49,6 +49,7 @@ class ECKeyAgentCardVerifier:
             raise InvalidKeyError("Only elliptic curve public keys are supported")
         self._public_key: ec.EllipticCurvePublicKey = loaded
         check_ec_key(self._public_key)
+        logger.debug("EC key verifier initialized, curve=%s", self._public_key.curve.name)
 
     def _verify_signature(self, bundle: bundle_pb.Bundle) -> tuple[str, bytes]:
         raw_pub = self._public_key.public_bytes(
@@ -81,9 +82,11 @@ class ECKeyAgentCardVerifier:
         self,
         signed_card: SignedAgentCard | dict[str, Any] | str | Path,
     ) -> VerificationResult:
+        logger.info("Verifying agent card with EC key")
         try:
             parsed = parse_signed_card(signed_card)
         except Exception as e:
+            logger.error("Invalid signed card: %s", e)
             return VerificationResult(valid=False, errors=[f"Invalid signed card: {e}"])
 
         bundle_dict = get_bundle_dict(parsed.attestations.signature_bundle)
@@ -102,6 +105,7 @@ class ECKeyAgentCardVerifier:
         try:
             payload_type, payload = self._verify_signature(bundle)
         except (crypto_exceptions.InvalidSignature, SigstoreA2AError, ValueError, AttributeError) as e:
+            logger.error("EC key verification failed: %s", e)
             return VerificationResult(valid=False, errors=[f"Signature verification failed: {e}"])
 
         try:
@@ -109,6 +113,7 @@ class ECKeyAgentCardVerifier:
         except Exception as e:
             return VerificationResult(valid=False, errors=[f"Failed to parse agent card from DSSE payload: {e}"])
 
+        logger.info("Agent card verified successfully (EC key)")
         return VerificationResult(
             valid=True,
             agent_card=verified_card,
