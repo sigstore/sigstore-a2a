@@ -15,6 +15,7 @@
 """Sigstore verification for A2A Agent Cards."""
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,8 @@ from sigstore.verify.policy import (
 from ..exceptions import ConfigurationError, InvalidAgentCardError
 from ..models.signature import SignedAgentCard
 from .common import VerificationResult
+
+logger = logging.getLogger(__name__)
 
 
 class IdentityConstraints:
@@ -91,6 +94,7 @@ class AgentCardVerifier:
         else:
             self._verifier = Verifier.production()
 
+        logger.debug("Sigstore verifier initialized, staging=%s", self.staging)
         return self._verifier
 
     def _build_policy(self, constraints: IdentityConstraints | None):
@@ -176,9 +180,11 @@ class AgentCardVerifier:
         signed_card: SignedAgentCard | dict[str, Any] | str | Path,
         constraints: IdentityConstraints | None = None,
     ) -> VerificationResult:
+        logger.info("Verifying agent card with Sigstore")
         try:
             parsed_signed_card = self._parse_signed_card(signed_card)
         except Exception as e:
+            logger.error("Invalid signed card: %s", e)
             return VerificationResult(valid=False, errors=[f"Invalid signed card: {e}"])
 
         sig_bundle = parsed_signed_card.attestations.signature_bundle
@@ -193,6 +199,7 @@ class AgentCardVerifier:
             error_msg = f"Signature verification failed: {e}"
             if cert_identity:
                 error_msg += f" (Certificate identity: issuer={cert_identity.get('issuer')}, subject={cert_identity.get('subject')})"
+            logger.error("Sigstore verification failed: %s", error_msg)
             return VerificationResult(valid=False, errors=[error_msg])
 
         try:
@@ -202,6 +209,7 @@ class AgentCardVerifier:
 
         identity = self._extract_identity(sig_bundle.signing_certificate)
 
+        logger.info("Agent card verified successfully (Sigstore, subject=%s)", identity.get("subject"))
         return VerificationResult(
             valid=True,
             agent_card=verified_card,

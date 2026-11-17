@@ -15,6 +15,7 @@
 """High-level signing API for A2A Agent Cards."""
 
 import json
+import logging
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Self
@@ -23,6 +24,8 @@ from a2a.types import AgentCard
 
 from .models.provenance import SLSAProvenance
 from .models.signature import SignedAgentCard
+
+logger = logging.getLogger(__name__)
 
 
 class SigningConfig:
@@ -67,6 +70,7 @@ class SigningConfig:
             client_secret=client_secret,
             use_ambient_credentials=use_ambient_credentials,
         )
+        logger.debug("Signing method selected: sigstore")
         return self
 
     def use_elliptic_key_signer(
@@ -80,6 +84,7 @@ class SigningConfig:
             private_key_path=private_key,
             password=password,
         )
+        logger.debug("Signing method selected: ec_key")
         return self
 
     def use_certificate_signer(
@@ -97,10 +102,12 @@ class SigningConfig:
             cert_chain_paths=cert_chain,
             password=password,
         )
+        logger.debug("Signing method selected: certificate")
         return self
 
     def _get_signer(self):
         if self._signer is None:
+            logger.debug("No signing method selected, defaulting to sigstore")
             self.use_sigstore_signer()
         return self._signer
 
@@ -120,6 +127,7 @@ class SigningConfig:
     ) -> Path:
         """Sign an agent card and write the result to a file."""
         signed = self.sign_card(agent_card, provenance_bundle=provenance_bundle)
+        logger.info("Writing signed agent card to %s", output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w") as f:
             json.dump(signed.to_dict(), f, indent=2, default=str)

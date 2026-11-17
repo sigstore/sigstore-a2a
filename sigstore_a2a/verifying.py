@@ -14,6 +14,7 @@
 
 """High-level verification API for A2A Agent Cards."""
 
+import logging
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Self
@@ -21,6 +22,8 @@ from typing import Any, Self
 from ._signing.common import VerificationResult
 from .exceptions import ConfigurationError
 from .models.signature import SignedAgentCard
+
+logger = logging.getLogger(__name__)
 
 
 class VerifyingConfig:
@@ -61,6 +64,7 @@ class VerifyingConfig:
             trust_config=trust_config,
             instance=instance,
         )
+        logger.debug("Verification method selected: sigstore")
         return self
 
     def use_elliptic_key_verifier(
@@ -70,6 +74,7 @@ class VerifyingConfig:
         from ._signing.verify_ec_key import ECKeyAgentCardVerifier
 
         self._verifier = ECKeyAgentCardVerifier(public_key_path=public_key)
+        logger.debug("Verification method selected: ec_key")
         return self
 
     def use_certificate_verifier(
@@ -83,6 +88,7 @@ class VerifyingConfig:
             cert_chain_paths=cert_chain,
             expected_san_uris=expected_san_uris,
         )
+        logger.debug("Verification method selected: certificate")
         return self
 
     def _get_verifier(self):

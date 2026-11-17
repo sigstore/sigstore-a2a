@@ -16,6 +16,7 @@
 
 import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,8 @@ from ..models.provenance import SLSAProvenance
 from ..models.signature import Attestations, SignedAgentCard
 from ..utils.crypto import canonicalize_json
 from .common import PREDICATE_TYPE
+
+logger = logging.getLogger(__name__)
 
 
 class AgentCardSigner:
@@ -79,6 +82,7 @@ class AgentCardSigner:
         self._signer = SigningContext.from_trust_config(trust_config)
         oidc_issuer = trust_config.signing_config.get_oidc_url()
         self._issuer = Issuer(oidc_issuer)
+        logger.debug("Sigstore signer initialized, oidc_issuer=%s, staging=%s", oidc_issuer, self.staging)
 
         return self._signer, self._issuer
 
@@ -102,6 +106,7 @@ class AgentCardSigner:
         except Exception as e:
             raise InvalidAgentCardError(f"Invalid agent card: {e}") from e
 
+        logger.info("Signing agent card '%s' with Sigstore", parsed_card.name)
         canonical_data = canonicalize_json(card_data)
         digest_hex = hashlib.sha256(canonical_data).hexdigest()
         digest_set = DigestSet(root={"sha256": digest_hex})
@@ -134,8 +139,10 @@ class AgentCardSigner:
                 bundle = signer.sign_dsse(statement)
 
         except Exception as e:
+            logger.error("Sigstore signing failed: %s", e)
             raise SigningError(f"Failed to sign agent card: {e}") from e
 
+        logger.info("Agent card '%s' signed successfully with Sigstore", parsed_card.name)
         attestations = Attestations(signature_bundle=bundle.to_json(), provenance_bundle=provenance_bundle)
         signed_card = SignedAgentCard(agent_card=parsed_card, attestations=attestations)
         signed_card._raw_card_data = card_data
