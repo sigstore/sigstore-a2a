@@ -30,6 +30,7 @@ from sigstore_models import intoto as intoto_pb
 from sigstore_models.bundle import v1 as bundle_pb
 from sigstore_models.common import v1 as common_pb
 
+from ..exceptions import InvalidAgentCardError, InvalidKeyError
 from ..models.provenance import SLSAProvenance
 from ..models.signature import Attestations, SignedAgentCard
 from ..utils.crypto import canonicalize_json
@@ -49,7 +50,7 @@ class ECKeyAgentCardSigner:
     def __init__(self, private_key_path: Path, password: bytes | None = None):
         loaded_key = serialization.load_pem_private_key(private_key_path.read_bytes(), password=password)
         if not isinstance(loaded_key, ec.EllipticCurvePrivateKey):
-            raise ValueError("Only elliptic curve private keys are supported")
+            raise InvalidKeyError("Only elliptic curve private keys are supported")
         self._private_key: ec.EllipticCurvePrivateKey = loaded_key
         check_ec_key(self._private_key.public_key())
 
@@ -91,7 +92,7 @@ class ECKeyAgentCardSigner:
                 try:
                     card_data = json.loads(str(agent_card))
                 except json.JSONDecodeError as e:
-                    raise ValueError(f"Invalid agent card JSON: {e}") from e
+                    raise InvalidAgentCardError(f"Invalid agent card JSON: {e}") from e
         elif isinstance(agent_card, dict):
             import copy
 
@@ -99,7 +100,7 @@ class ECKeyAgentCardSigner:
         elif isinstance(agent_card, AgentCard):
             card_data = MessageToDict(agent_card)
         else:
-            raise ValueError(f"Invalid agent card type: {type(agent_card)}")
+            raise InvalidAgentCardError(f"Invalid agent card type: {type(agent_card)}")
 
         parsed_card = ParseDict(card_data, AgentCard(), ignore_unknown_fields=True)
         raw_payload = self._build_statement(card_data, parsed_card.name)

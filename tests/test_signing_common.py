@@ -27,6 +27,7 @@ from sigstore_a2a._signing.common import (
     ec_hash_for_key,
     pae,
 )
+from sigstore_a2a.exceptions import InvalidAgentCardError, InvalidBundleError, InvalidKeyError
 
 
 class TestPAE:
@@ -64,12 +65,12 @@ class TestCheckECKey:
 
     def test_rsa_key_rejected(self):
         key = rsa.generate_private_key(65537, 2048).public_key()
-        with pytest.raises(ValueError, match="Only elliptic curve"):
+        with pytest.raises(InvalidKeyError, match="Only elliptic curve"):
             check_ec_key(key)
 
     def test_unsupported_curve_rejected(self):
         key = ec.generate_private_key(ec.SECP192R1()).public_key()
-        with pytest.raises(ValueError, match="Unsupported curve"):
+        with pytest.raises(InvalidKeyError, match="Unsupported curve"):
             check_ec_key(key)
 
 
@@ -103,7 +104,7 @@ class TestParseSignedCard:
     def test_invalid_type_raises(self):
         from sigstore_a2a._signing.common import parse_signed_card
 
-        with pytest.raises(TypeError):
+        with pytest.raises(InvalidAgentCardError):
             parse_signed_card(12345)
 
     def test_file_path_input(self, tmp_path):
@@ -133,7 +134,7 @@ class TestExtractVerifiedCard:
     def test_wrong_payload_type_raises(self):
         from sigstore_a2a._signing.common import extract_verified_card
 
-        with pytest.raises(ValueError, match="payload type"):
+        with pytest.raises(InvalidBundleError, match="payload type"):
             extract_verified_card("wrong/type", b'{"_type": "x"}')
 
     def test_wrong_statement_type_raises(self):
@@ -142,7 +143,7 @@ class TestExtractVerifiedCard:
         from sigstore_a2a._signing.common import extract_verified_card
 
         payload = json.dumps({"_type": "wrong", "predicate": {}}).encode()
-        with pytest.raises(ValueError, match="statement type"):
+        with pytest.raises(InvalidBundleError, match="statement type"):
             extract_verified_card("application/vnd.in-toto+json", payload)
 
     def test_missing_predicate_raises(self):
@@ -151,7 +152,7 @@ class TestExtractVerifiedCard:
         from sigstore_a2a._signing.common import extract_verified_card
 
         payload = json.dumps({"_type": "https://in-toto.io/Statement/v1"}).encode()
-        with pytest.raises(ValueError, match="predicate"):
+        with pytest.raises(InvalidBundleError, match="predicate"):
             extract_verified_card("application/vnd.in-toto+json", payload)
 
 

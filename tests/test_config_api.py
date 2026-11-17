@@ -23,6 +23,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.x509 import oid
 
+from sigstore_a2a.exceptions import ConfigurationError
 from sigstore_a2a.signing import SigningConfig
 from sigstore_a2a.verifying import VerifyingConfig
 from tests.conftest import generate_ec_keypair
@@ -167,7 +168,7 @@ class TestVerifyingConfig:
         assert result.certificate is not None
 
     def test_no_method_raises(self):
-        with pytest.raises(ValueError, match="No verification method selected"):
+        with pytest.raises(ConfigurationError, match="No verification method selected"):
             VerifyingConfig().verify({"agentCard": {}, "attestations": {}})
 
     def test_verify_file(self, tmp_path):
@@ -229,3 +230,35 @@ class TestEndToEnd:
         result = VerifyingConfig().use_certificate_verifier(cert_chain=[cert_path]).verify_file(out)
 
         assert result.valid
+
+
+class TestExceptionHierarchy:
+    def test_signing_error_on_bad_sigstore_token(self):
+        from sigstore_a2a.exceptions import SigningError
+
+        signer = SigningConfig().use_sigstore_signer(identity_token="invalid-token")
+        with pytest.raises(SigningError, match="Failed to sign"):
+            signer.sign_card(SAMPLE_CARD)
+
+    def test_configuration_error_mutually_exclusive_trust_options(self, tmp_path):
+        from sigstore_a2a.exceptions import ConfigurationError
+
+        trust = tmp_path / "trust.json"
+        trust.write_text("{}")
+        config = SigningConfig().use_sigstore_signer(staging=True, trust_config=trust)
+        with pytest.raises(ConfigurationError, match="Only one of"):
+            config.sign_card(SAMPLE_CARD)
+
+    def test_configuration_error_mutually_exclusive_verify_trust_options(self, tmp_path):
+        from sigstore_a2a.exceptions import ConfigurationError
+
+        trust = tmp_path / "trust.json"
+        trust.write_text("{}")
+        config = VerifyingConfig().use_sigstore_verifier(staging=True, trust_config=trust)
+        with pytest.raises(ConfigurationError, match="Only one of"):
+            config.verify(
+                {
+                    "agentCard": {"name": "t", "version": "1", "skills": []},
+                    "attestations": {"signatureBundle": {}},
+                }
+            )

@@ -32,6 +32,7 @@ from sigstore.verify.policy import (
     UnsafeNoOp,
 )
 
+from ..exceptions import ConfigurationError, InvalidAgentCardError
 from ..models.signature import SignedAgentCard
 from .common import VerificationResult
 
@@ -77,7 +78,7 @@ class AgentCardVerifier:
 
         trust_opts = sum(bool(x) for x in [self.staging, self.instance, self.trust_config])
         if trust_opts > 1:
-            raise ValueError("Only one of --staging, --instance, or --trust_config may be specified")
+            raise ConfigurationError("Only one of --staging, --instance, or --trust_config may be specified")
 
         if self.trust_config:
             trust_config = ClientTrustConfig.from_json(self.trust_config.read_text())
@@ -160,14 +161,14 @@ class AgentCardVerifier:
         elif isinstance(signed_card, dict):
             card_data = signed_card
         else:
-            raise TypeError(f"Invalid signed card type: {type(signed_card)}")
+            raise InvalidAgentCardError(f"Invalid signed card type: {type(signed_card)}")
         return SignedAgentCard.model_validate(card_data)
 
     def _extract_verified_card(self, payload: bytes) -> tuple[AgentCard, dict[str, Any]]:
         statement = json.loads(payload)
         signed_predicate = statement.get("predicate")
         if signed_predicate is None or not isinstance(signed_predicate, dict):
-            raise ValueError("DSSE statement does not contain a valid predicate")
+            raise InvalidAgentCardError("DSSE statement does not contain a valid predicate")
         return ParseDict(signed_predicate, AgentCard(), ignore_unknown_fields=True), signed_predicate
 
     def verify_signed_card(

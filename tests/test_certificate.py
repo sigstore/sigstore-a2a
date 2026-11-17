@@ -26,6 +26,7 @@ from cryptography.x509 import oid
 
 from sigstore_a2a._signing.sign_certificate import CertificateAgentCardSigner
 from sigstore_a2a._signing.verify_certificate import CertificateAgentCardVerifier
+from sigstore_a2a.exceptions import InvalidCertificateError
 from tests.conftest import generate_ec_keypair
 
 SAMPLE_AGENT_CARD = {
@@ -166,7 +167,7 @@ class TestCertificateEdgeCases:
         other_key = ec.generate_private_key(ec.SECP256R1())
         cert_path, _ = _generate_self_signed_cert(tmp_path, other_key)
 
-        with pytest.raises(ValueError, match="does not match"):
+        with pytest.raises(InvalidCertificateError, match="does not match"):
             CertificateAgentCardSigner(
                 private_key_path=key_path,
                 signing_cert_path=cert_path,
@@ -190,7 +191,7 @@ class TestCertificateEdgeCases:
         cert_path = tmp_path / "expired.pem"
         cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
 
-        with pytest.raises(ValueError, match="expired"):
+        with pytest.raises(InvalidCertificateError, match="expired"):
             CertificateAgentCardSigner(private_key_path=key_path, signing_cert_path=cert_path)
 
     def test_wrong_trust_chain_fails(self, tmp_path):
@@ -315,7 +316,7 @@ class TestCertificateEdgeCases:
         cert_path = tmp_path / "future.pem"
         cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
 
-        with pytest.raises(ValueError, match="not yet valid"):
+        with pytest.raises(InvalidCertificateError, match="not yet valid"):
             CertificateAgentCardSigner(private_key_path=key_path, signing_cert_path=cert_path)
 
     def test_san_uri_required_but_cert_has_no_san(self, tmp_path):

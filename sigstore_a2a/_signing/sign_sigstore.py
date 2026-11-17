@@ -26,6 +26,7 @@ from sigstore.models import ClientTrustConfig
 from sigstore.oidc import IdentityToken, Issuer, detect_credential
 from sigstore.sign import SigningContext
 
+from ..exceptions import ConfigurationError, InvalidAgentCardError, SigningError
 from ..models.provenance import SLSAProvenance
 from ..models.signature import Attestations, SignedAgentCard
 from ..utils.crypto import canonicalize_json
@@ -64,7 +65,7 @@ class AgentCardSigner:
 
         trust_opts = sum(bool(x) for x in [self.staging, self.instance, self.trust_config])
         if trust_opts > 1:
-            raise ValueError("Only one of --staging, --instance, or --trust_config may be specified")
+            raise ConfigurationError("Only one of --staging, --instance, or --trust_config may be specified")
 
         if self.trust_config:
             trust_config = ClientTrustConfig.from_json(self.trust_config.read_text())
@@ -95,11 +96,11 @@ class AgentCardSigner:
         elif isinstance(agent_card, AgentCard):
             card_data = MessageToDict(agent_card)
         else:
-            raise ValueError(f"Invalid agent card type: {type(agent_card)}")
+            raise InvalidAgentCardError(f"Invalid agent card type: {type(agent_card)}")
         try:
             parsed_card = ParseDict(card_data, AgentCard(), ignore_unknown_fields=True)
         except Exception as e:
-            raise ValueError(f"Invalid agent card: {e}") from e
+            raise InvalidAgentCardError(f"Invalid agent card: {e}") from e
 
         canonical_data = canonicalize_json(card_data)
         digest_hex = hashlib.sha256(canonical_data).hexdigest()
@@ -133,7 +134,7 @@ class AgentCardSigner:
                 bundle = signer.sign_dsse(statement)
 
         except Exception as e:
-            raise RuntimeError(f"Failed to sign agent card: {e}") from e
+            raise SigningError(f"Failed to sign agent card: {e}") from e
 
         attestations = Attestations(signature_bundle=bundle.to_json(), provenance_bundle=provenance_bundle)
         signed_card = SignedAgentCard(agent_card=parsed_card, attestations=attestations)
