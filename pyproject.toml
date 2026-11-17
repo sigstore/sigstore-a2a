@@ -60,6 +60,16 @@ keywords = [
 [project.scripts]
 sigstore-a2a = "sigstore_a2a.cli.main:cli"
 
+[project.optional-dependencies]
+otel = [
+    "opentelemetry-api",
+    "opentelemetry-sdk",
+    "opentelemetry-distro",
+    "opentelemetry-instrumentation",
+    "opentelemetry-instrumentation-urllib3",
+    "opentelemetry-exporter-otlp",
+]
+
 [project.urls]
 Homepage = "https://sigstore.github.io/sigstore-a2a"
 Changelog = "https://github.com/sigstore/sigstore-a2a/blob/main/CHANGELOG.md"
