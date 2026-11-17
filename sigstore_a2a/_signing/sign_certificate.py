@@ -24,6 +24,7 @@ from cryptography.hazmat.primitives import serialization
 from sigstore_models.bundle import v1 as bundle_pb
 from sigstore_models.common import v1 as common_pb
 
+from ..exceptions import InvalidCertificateError
 from .sign_ec_key import ECKeyAgentCardSigner
 
 
@@ -43,12 +44,14 @@ class CertificateAgentCardSigner(ECKeyAgentCardSigner):
 
         now = datetime.datetime.now(datetime.UTC)
         if now > self._signing_cert.not_valid_after_utc:
-            raise ValueError(f"Signing certificate expired ({self._signing_cert.not_valid_after_utc})")
+            raise InvalidCertificateError(f"Signing certificate expired ({self._signing_cert.not_valid_after_utc})")
         if now < self._signing_cert.not_valid_before_utc:
-            raise ValueError(f"Signing certificate not yet valid ({self._signing_cert.not_valid_before_utc})")
+            raise InvalidCertificateError(
+                f"Signing certificate not yet valid ({self._signing_cert.not_valid_before_utc})"
+            )
 
         if self._private_key.public_key() != self._signing_cert.public_key():
-            raise ValueError("Certificate public key does not match private key")
+            raise InvalidCertificateError("Certificate public key does not match private key")
 
         chain_bytes = b"".join(p.read_bytes() for p in cert_chain_paths)
         self._trust_chain = x509.load_pem_x509_certificates(chain_bytes) if chain_bytes else []

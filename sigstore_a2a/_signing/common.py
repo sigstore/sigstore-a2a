@@ -25,6 +25,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from google.protobuf.json_format import ParseDict
 from sigstore.models import Bundle
 
+from ..exceptions import InvalidAgentCardError, InvalidBundleError, InvalidKeyError
 from ..models.signature import SignedAgentCard
 
 # In-toto / DSSE constants
@@ -61,15 +62,15 @@ def ec_hash_for_key(public_key: ec.EllipticCurvePublicKey) -> hashes.HashAlgorit
         case 521:
             return hashes.SHA512()
         case _:
-            raise ValueError(f"Unsupported EC key size {public_key.curve.key_size}")
+            raise InvalidKeyError(f"Unsupported EC key size {public_key.curve.key_size}")
 
 
 def check_ec_key(public_key) -> None:
     """Validate that a key is a supported elliptic curve key."""
     if not isinstance(public_key, ec.EllipticCurvePublicKey):
-        raise ValueError("Only elliptic curve keys are supported")
+        raise InvalidKeyError("Only elliptic curve keys are supported")
     if public_key.curve.name not in SUPPORTED_EC_CURVES:
-        raise ValueError(f"Unsupported curve '{public_key.curve.name}'")
+        raise InvalidKeyError(f"Unsupported curve '{public_key.curve.name}'")
 
 
 class VerificationResult:
@@ -111,7 +112,7 @@ def parse_signed_card(signed_card: SignedAgentCard | dict | str | Path) -> Signe
     elif isinstance(signed_card, dict):
         card_data = signed_card
     else:
-        raise TypeError(f"Invalid signed card type: {type(signed_card)}")
+        raise InvalidAgentCardError(f"Invalid signed card type: {type(signed_card)}")
     return SignedAgentCard.model_validate(card_data)
 
 
@@ -125,11 +126,13 @@ def get_bundle_dict(sig_bundle: Bundle | dict) -> dict:
 def extract_verified_card(payload_type: str, payload: bytes) -> tuple[AgentCard, dict]:
     """Extract the agent card from a verified DSSE payload."""
     if payload_type != IN_TOTO_JSON_PAYLOAD_TYPE:
-        raise ValueError(f"Expected DSSE payload type {IN_TOTO_JSON_PAYLOAD_TYPE}, got {payload_type}")
+        raise InvalidBundleError(f"Expected DSSE payload type {IN_TOTO_JSON_PAYLOAD_TYPE}, got {payload_type}")
     statement = json.loads(payload)
     if statement.get("_type") != IN_TOTO_STATEMENT_TYPE:
-        raise ValueError(f"Expected in-toto statement type {IN_TOTO_STATEMENT_TYPE}, got {statement.get('_type')}")
+        raise InvalidBundleError(
+            f"Expected in-toto statement type {IN_TOTO_STATEMENT_TYPE}, got {statement.get('_type')}"
+        )
     predicate = statement.get("predicate")
     if predicate is None or not isinstance(predicate, dict):
-        raise ValueError("DSSE statement does not contain a valid predicate")
+        raise InvalidBundleError("DSSE statement does not contain a valid predicate")
     return ParseDict(predicate, AgentCard(), ignore_unknown_fields=True), predicate

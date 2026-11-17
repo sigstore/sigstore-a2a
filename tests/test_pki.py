@@ -22,6 +22,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
 from sigstore_a2a._signing.sign_ec_key import ECKeyAgentCardSigner
 from sigstore_a2a._signing.verify_ec_key import ECKeyAgentCardVerifier
+from sigstore_a2a.exceptions import InvalidAgentCardError, InvalidKeyError
 from tests.conftest import generate_ec_keypair
 
 SAMPLE_AGENT_CARD = {
@@ -138,7 +139,7 @@ class TestECKeyEdgeCases:
                 serialization.NoEncryption(),
             )
         )
-        with pytest.raises(ValueError, match="elliptic curve"):
+        with pytest.raises(InvalidKeyError, match="elliptic curve"):
             ECKeyAgentCardSigner(private_key_path=key_path)
 
     def test_rsa_key_rejected_for_verification(self, tmp_path):
@@ -151,7 +152,7 @@ class TestECKeyEdgeCases:
                 serialization.PublicFormat.SubjectPublicKeyInfo,
             )
         )
-        with pytest.raises(ValueError, match="elliptic curve"):
+        with pytest.raises(InvalidKeyError, match="elliptic curve"):
             ECKeyAgentCardVerifier(public_key_path=pub_path)
 
     def test_tampered_payload_fails_verification(self, tmp_path):
@@ -189,7 +190,7 @@ class TestECKeyEdgeCases:
         key_path, _ = generate_ec_keypair(tmp_path)
         signer = ECKeyAgentCardSigner(private_key_path=key_path)
 
-        with pytest.raises(ValueError, match="Invalid agent card JSON"):
+        with pytest.raises(InvalidAgentCardError, match="Invalid agent card JSON"):
             signer.sign_agent_card("not valid json {{{")
 
     def test_wrong_media_type_returns_error(self, tmp_path):

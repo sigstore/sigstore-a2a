@@ -27,6 +27,7 @@ from cryptography.x509 import oid
 from OpenSSL import crypto
 from sigstore_models.bundle import v1 as bundle_pb
 
+from ..exceptions import InvalidBundleError, InvalidCertificateError, SigstoreA2AError
 from ..models.signature import SignedAgentCard
 from .common import (
     BUNDLE_MEDIA_TYPE,
@@ -59,7 +60,7 @@ class CertificateAgentCardVerifier:
         """Validate the certificate chain and return the leaf cert's public key."""
         signing_chain = bundle.verification_material.x509_certificate_chain
         if not signing_chain or not signing_chain.certificates:
-            raise ValueError("Bundle has no certificate chain")
+            raise InvalidBundleError("Bundle has no certificate chain")
 
         signing_cert = x509.load_der_x509_certificate(signing_chain.certificates[0].raw_bytes)
 
@@ -105,7 +106,7 @@ class CertificateAgentCardVerifier:
             pass
 
         if not can_sign:
-            raise ValueError("Signing certificate cannot be used for signing")
+            raise InvalidCertificateError("Signing certificate cannot be used for signing")
 
     def _verify_san_identity(self, cert: x509.Certificate) -> None:
         if not self._expected_san_uris:
@@ -113,12 +114,12 @@ class CertificateAgentCardVerifier:
         try:
             san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
         except x509.ExtensionNotFound as err:
-            raise ValueError("Signing certificate has no SubjectAlternativeName") from err
+            raise InvalidCertificateError("Signing certificate has no SubjectAlternativeName") from err
 
         actual_uris = frozenset(san.get_values_for_type(x509.UniformResourceIdentifier))
         missing = self._expected_san_uris - actual_uris
         if missing:
-            raise ValueError(f"Certificate missing expected SAN URI(s): {sorted(missing)}")
+            raise InvalidCertificateError(f"Certificate missing expected SAN URI(s): {sorted(missing)}")
 
     def _verify_signature(self, bundle: bundle_pb.Bundle) -> tuple[str, bytes]:
         public_key = self._verify_certificate_chain(bundle)
@@ -152,7 +153,13 @@ class CertificateAgentCardVerifier:
 
         try:
             payload_type, payload = self._verify_signature(bundle)
-        except (crypto_exceptions.InvalidSignature, crypto.Error, crypto.X509StoreContextError, ValueError) as e:
+        except (
+            crypto_exceptions.InvalidSignature,
+            crypto.Error,
+            crypto.X509StoreContextError,
+            SigstoreA2AError,
+            ValueError,
+        ) as e:
             return VerificationResult(valid=False, errors=[f"Signature verification failed: {e}"])
 
         try:

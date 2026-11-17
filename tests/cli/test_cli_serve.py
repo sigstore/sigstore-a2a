@@ -27,6 +27,7 @@ from google.protobuf.json_format import ParseDict
 from sigstore_a2a._signing.sign_certificate import CertificateAgentCardSigner
 from sigstore_a2a._signing.sign_ec_key import ECKeyAgentCardSigner
 from sigstore_a2a.cli.serve import create_app
+from sigstore_a2a.exceptions import VerificationError
 from tests.conftest import generate_ec_keypair
 
 FIXTURES_DIR = Path(__file__).parent.parent / "historic"
@@ -264,7 +265,7 @@ class TestServeWithCertificate:
         _, wrong_cert_path = _sign_card_with_certificate(tmp_path / "other")
 
         app = create_app(signed_path, verify_on_serve=True, cert_chain_paths=[wrong_cert_path])
-        with pytest.raises(ValueError, match="verification failed"):
+        with pytest.raises(VerificationError, match="verification failed"):
             with TestClient(app):
                 pass
 

@@ -29,6 +29,7 @@ from sigstore.verify.policy import (
 )
 
 from sigstore_a2a._signing.verify_sigstore import AgentCardVerifier, IdentityConstraints
+from sigstore_a2a.exceptions import InvalidAgentCardError
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -201,7 +202,7 @@ class TestExtractVerifiedCard:
         verifier = AgentCardVerifier()
         statement = json.dumps({"_type": "...", "subject": []}).encode()
 
-        with pytest.raises(ValueError, match="does not contain a valid predicate"):
+        with pytest.raises(InvalidAgentCardError, match="does not contain a valid predicate"):
             verifier._extract_verified_card(statement)
 
     def test_malformed_json_raises(self):
@@ -365,5 +366,5 @@ class TestParseSignedCard:
 
     def test_invalid_type_raises_type_error(self):
         verifier = AgentCardVerifier()
-        with pytest.raises(TypeError, match="Invalid signed card type"):
+        with pytest.raises(InvalidAgentCardError, match="Invalid signed card type"):
             verifier._parse_signed_card(42)  # type: ignore[arg-type]

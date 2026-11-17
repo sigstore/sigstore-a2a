@@ -24,6 +24,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from sigstore_models.bundle import v1 as bundle_pb
 
+from ..exceptions import InvalidKeyError, SigstoreA2AError, VerificationError
 from ..models.signature import SignedAgentCard
 from .common import (
     BUNDLE_MEDIA_TYPE,
@@ -45,7 +46,7 @@ class ECKeyAgentCardVerifier:
     def __init__(self, public_key_path: Path):
         loaded = serialization.load_pem_public_key(public_key_path.read_bytes())
         if not isinstance(loaded, ec.EllipticCurvePublicKey):
-            raise ValueError("Only elliptic curve public keys are supported")
+            raise InvalidKeyError("Only elliptic curve public keys are supported")
         self._public_key: ec.EllipticCurvePublicKey = loaded
         check_ec_key(self._public_key)
 
@@ -58,13 +59,13 @@ class ECKeyAgentCardVerifier:
 
         vm = bundle.verification_material
         if vm is None or not hasattr(vm, "public_key") or vm.public_key is None:
-            raise ValueError(
+            raise VerificationError(
                 "Bundle does not contain a public key identifier — this may be a certificate-signed bundle"
             )
 
         hint = vm.public_key.hint
         if hint and hint != expected_hint:
-            raise ValueError("Public key hash mismatch: bundle was signed with a different key")
+            raise VerificationError("Public key hash mismatch: bundle was signed with a different key")
         if not hint:
             logger.warning("Bundle has no public key hint — key binding not enforced")
 
@@ -100,7 +101,7 @@ class ECKeyAgentCardVerifier:
 
         try:
             payload_type, payload = self._verify_signature(bundle)
-        except (crypto_exceptions.InvalidSignature, ValueError, AttributeError) as e:
+        except (crypto_exceptions.InvalidSignature, SigstoreA2AError, ValueError, AttributeError) as e:
             return VerificationResult(valid=False, errors=[f"Signature verification failed: {e}"])
 
         try:

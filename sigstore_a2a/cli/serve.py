@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse
 from google.protobuf.json_format import MessageToDict
 from rich.console import Console
 
+from ..exceptions import VerificationError
 from ..models.signature import SignedAgentCard
 from ..verifying import VerifyingConfig
 
@@ -57,7 +58,7 @@ def create_app(
                 result = config.verify(signed_card)
 
                 if not result.valid:
-                    raise ValueError(f"Signature verification failed: {result.errors}")
+                    raise VerificationError(f"Signature verification failed: {result.errors}")
 
                 console.print("[green]✓[/green] Agent Card signature verified")
 

@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Self
 
 from ._signing.common import VerificationResult
+from .exceptions import ConfigurationError
 from .models.signature import SignedAgentCard
 
 
@@ -86,7 +87,7 @@ class VerifyingConfig:
 
     def _get_verifier(self):
         if self._verifier is None:
-            raise ValueError(
+            raise ConfigurationError(
                 "No verification method selected. "
                 "Call use_sigstore_verifier(), use_elliptic_key_verifier(), "
                 "or use_certificate_verifier() first."
